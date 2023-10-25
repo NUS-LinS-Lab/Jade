@@ -1,0 +1,118 @@
+# Azure Pipeline settings
+# Ref: https://docs.microsoft.com/en-us/azure/devops/pipelines
+
+stages:
+  - stage: Test
+    jobs:
+      - job: linux_test
+        pool: { vmImage: "ubuntu-latest" }
+        steps:
+          - bash: |
+              cd ci/manylinux/tests
+              ./run_tests.sh
+          - task: PublishTestResults@2
+            inputs: {
+                testResultsFormat: "cTest",
+                testResultsFiles: "Testing/**/Test.xml",
+                searchFolder: "$(System.DefaultWorkingDirectory)", # Optional
+                #mergeTestResults: false # Optional
+                #testRunTitle: # Optional
+                #buildPlatform: # Optional
+                #buildConfiguration: # Optional
+                #publishRunAttachments: true # Optional
+                failTaskOnFailedTests: true, # Optional
+              }
+  - stage: Mac
+    jobs:
+      - job: macos_36
+        pool: { vmImage: "macOS-10.15" }
+        variables:
+          - name: PYTHON_VERSION_NUMBER
+            value: "3.6"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.6"
+              architecture: "x64"
+          - script: ci/mac/install_dependencies.sh
+          - bash: |
+              cd ci/mac
+              ./build_wheels.sh
+          - task: PublishBuildArtifacts@1
+            inputs: { pathtoPublish: "wheelhouse" }
+      - job: macos_37
+        pool: { vmImage: "macOS-10.15" }
+        variables:
+          - name: PYTHON_VERSION_NUMBER
+            value: "3.7"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.7"
+              architecture: "x64"
+          - script: ci/mac/install_dependencies.sh
+          - bash: |
+              cd ci/mac
+              ./build_wheels.sh
+          - task: PublishBuildArtifacts@1
+            inputs: { pathtoPublish: "wheelhouse" }
+      - job: macos_38
+        pool: { vmImage: "macOS-10.15" }
+        variables:
+          - name: PYTHON_VERSION_NUMBER
+            value: "3.8"
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: "3.8"
+              architecture: "x64"
+          - script: ci/mac/install_dependencies.sh
+          # Try to generate a graphviz file to help debug
+          - bash: |
+              cd ci/mac
+              ./generate_graphviz.sh
+          - task: PublishBuildArtifacts@1
+            inputs: { pathtoPublish: "build_viz/viz.dot" }
+          # </graphviz>
+          - bash: |
+              cd ci/mac
+              ./build_wheels.sh
+          - task: PublishBuildArtifacts@1
+            inputs: { pathtoPublish: "wheelhouse" }
+  - stage: Linux
+    jobs:
+      - job: linux_36
+        pool: { vmImage: "ubuntu-latest" }
+        steps:
+          - bash: |
+              cd ci/manylinux/3.6
+              ./build_wheel.sh
+          - task: PublishBuildArtifacts@1
+            inputs: { pathtoPublish: "wheelhouse" }
+
+      - job: linux_37
+        pool: { vmImage: "ubuntu-latest" }
+        steps:
+          - bash: |
+              cd ci/manylinux/3.7
+              ./build_wheel.sh
+          - task: PublishBuildArtifacts@1
+            inputs: { pathtoPublish: "wheelhouse" }
+
+      - job: linux_38
+        pool: { vmImage: "ubuntu-latest" }
+        steps:
+          - bash: |
+              cd ci/manylinux/3.8
+              ./build_wheel.sh
+          - task: PublishBuildArtifacts@1
+            inputs: { pathtoPublish: "wheelhouse" }
+
+      - job: linux_39
+        pool: { vmImage: "ubuntu-latest" }
+        steps:
+          - bash: |
+              cd ci/manylinux/3.9
+              ./build_wheel.sh
+          - task: PublishBuildArtifacts@1
+            inputs: { pathtoPublish: "wheelhouse" }

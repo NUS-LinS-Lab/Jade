@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package dart.proto;
+
+import "Eigen.proto";
+import "TrajectoryRollout.proto";
+
+message MPCStartRequest {
+  uint64 clientClock = 1;
+}
+
+message MPCStartReply {
+}
+
+message MPCStopRequest {
+  uint64 clientClock = 1;
+}
+
+message MPCStopReply {
+}
+
+message MPCListenForUpdatesRequest {
+}
+
+message MPCListenForUpdatesReply {
+  uint64 startTime = 1;
+  TrajectoryRollout rollout = 2;
+  uint64 replanDurationMillis = 3;
+}
+
+message MPCRecordGroundTruthStateRequest {
+  uint64 time = 1;
+  VectorXs pos = 2;
+  VectorXs vel = 3;
+  VectorXs mass = 4;
+}
+
+message MPCRecordGroundTruthStateReply {
+}
+
+message MPCObserveForceRequest {
+  uint64 time = 1;
+  VectorXs force = 2;
+}
+
+message MPCObserveForceReply {
+}
+
+// The main service definition
+service MPCService {
+  rpc Start (MPCStartRequest) returns (MPCStartReply) {}
+  rpc Stop (MPCStopRequest) returns (MPCStopReply) {}
+  rpc ListenForUpdates (MPCListenForUpdatesRequest) returns (stream MPCListenForUpdatesReply) {}
+  rpc RecordGroundTruthState (MPCRecordGroundTruthStateRequest) returns (MPCRecordGroundTruthStateReply) {}
+  rpc ObserveForce (MPCObserveForceRequest) returns (MPCObserveForceReply) {}
+}

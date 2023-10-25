@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+<robot name="ground_skeleton">
+    <link name="world" />
+    <link name="ground_link">
+        <inertial>
+            <mass value="1.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0.0" rpy="0 0 0" />
+            <geometry>
+<!--                <box size="0.28 0.28 0.04"/>-->
+                <mesh filename="./real_pan.obj"/>
+            </geometry>
+            <material name="pan_grey_">
+				<color rgba="0.5 0.5 0.5 1.0" />
+			</material>
+        </visual>
+        <collision group="default">
+            <origin xyz="0 0 0.0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./real_pan_coacd.obj"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="ground_joint" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="world" />
+        <child link="ground_link" />
+    </joint>
+    <!-- <link name="ground_link2">
+        <inertial>
+            <mass value="1.0" />
+            <origin xyz="0 0.145 0.039" rpy="-0.05 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0.145 0.039" rpy="-0.05 0 0" />
+            <geometry>
+                <box size="0.255 0.02 0.05"/>
+            </geometry>
+            <material name="pan_grey">
+				<color rgba="0 0 0 0" />
+			</material>
+        </visual>
+        <collision group="default">
+            <origin xyz="0 0.145 0.039" rpy="-0.05 0 0" />
+            <geometry>
+                <box size="0.255 0.02 0.05"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="ground_joint2" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="world" />
+        <child link="ground_link2" />
+    </joint>
+    <link name="ground_link3">
+        <inertial>
+            <mass value="1.0" />
+            <origin xyz="0 -0.145 0.04" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.145 0.04" rpy="0 0 0" />
+            <geometry>
+                <box size="0.255 0.02 0.04"/>
+            </geometry>
+            <material name="pan_grey">
+				<color rgba="0 0 0 0" />
+			</material>
+        </visual>
+        <collision group="default">
+            <origin xyz="0 -0.145 0.04" rpy="0 0 0" />
+            <geometry>
+                <box size="0.255 0.02 0.04"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="ground_joint3" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="world" />
+        <child link="ground_link3" />
+    </joint>
+    <link name="ground_link4">
+        <inertial>
+            <mass value="1.0" />
+            <origin xyz="0.140 0 0.04" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+        <visual>
+            <origin xyz="0.140 0 0.04" rpy="0 0 0" />
+            <geometry>
+                <box size="0.02 0.30 0.04"/>
+            </geometry>
+            <material name="pan_grey">
+				<color rgba="0 0 0 0" />
+			</material>
+        </visual>
+        <collision group="default">
+            <origin xyz="0.140 0 0.04" rpy="0 0 0" />
+            <geometry>
+                <box size="0.02 0.30 0.04"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="ground_joint4" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="world" />
+        <child link="ground_link4" />
+    </joint>
+    <link name="ground_link5">
+        <inertial>
+            <mass value="1.0" />
+            <origin xyz="-0.140 0 0.04" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+        <visual>
+            <origin xyz="-0.140 0 0.04" rpy="0 0 0" />
+            <geometry>
+                <box size="0.02 0.30 0.04"/>
+            </geometry>
+            <material name="pan_grey">
+				<color rgba="0 0 0 0" />
+			</material>
+        </visual>
+        <collision group="default">
+            <origin xyz="-0.140 0 0.04" rpy="0 0 0" />
+            <geometry>
+                <box size="0.02 0.30 0.04"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="ground_joint5" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="world" />
+        <child link="ground_link5" />
+    </joint> -->
+</robot>

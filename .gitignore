@@ -1,0 +1,88 @@
+build/
+syntax: glob
+*.swp
+*.swo
+CPack*
+CTest*
+Testing/
+TAGS
+.DS_Store
+.cproject
+.project
+.vscode
+*.orig
+*.idb
+*.pdb
+*.ncb
+*.suo
+*.htm
+*.user
+*.dep
+*.manifest
+*.rsp
+*~
+.idea/*
+/nbproject/
+/doxygen/html/
+docs/readthedocs/site
+data/screencap/*
+dist/
+wheelhouse/
+perf_results/
+perf_results/perf.data
+perf_results/tmp.perf
+perf_results/tmp.folded
+
+# vim generated files #
+#######################
+.*.swp
+.*.swo
+.netrwhist
+
+# emacs backup files #
+######################
+*~
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ctag files #
+##############
+TAGS
+GTAGS
+GPATH
+GRTAGS
+
+# python #
+##########
+*.pyc
+*.pyo
+.installed.cfg
+bin
+develop-eggs
+dist
+downloads
+eggs
+parts
+src/*.egg-info
+lib
+lib64
+.ipynb_checkpoints
+
+# C/C++ #
+#########
+_build
+cmake-build-debug/
+
+# syncthing #
+#############
+.stignore
+.stfolder
+.stglobalignore

@@ -1,0 +1,36 @@
+<?xml version="0.0" ?>
+<robot name="pancake.urdf">
+  <link name="base" />
+  <link name="pancake">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+<!--        <mesh filename="pie6_v.obj" scale="1 1 1"/>-->
+        <mesh filename="pie3_v.obj" scale="0.6 0.6 2"/>
+<!--        <mesh filename="pancake_v.obj" scale="0.001 0.001 0.0015"/>-->
+      </geometry>
+      <material name="pancake_yellow">
+        <color rgba="0.86 0.68 0.25 1.0"/>
+      </material>
+    </visual>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.1"/>
+<!--      <inertia ixx="0.000045" ixy="0" ixz="0" iyy="0.000045" iyz="0" izz="0.00009"/>-->
+      <inertia ixx="0.0009" ixy="0" ixz="0" iyy="0.0009" iyz="0" izz="0.0018"/>
+    </inertial>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+<!--  	    <mesh filename="pie6_v.obj" scale="1 1 1"/>-->
+  	    <mesh filename="pie3_v.obj" scale="0.6 0.6 2"/>
+<!--  	    <mesh filename="pancake_v.obj" scale="0.001 0.001 0.0015"/>-->
+      </geometry>
+    </collision>
+  </link>
+      <joint name="pancake_joint" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="base" />
+        <child link="pancake" />
+    </joint>
+</robot>

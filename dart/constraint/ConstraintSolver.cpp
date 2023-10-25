@@ -1,0 +1,961 @@
+/*
+ * Copyright (c) 2011-2019, The DART development contributors
+ * All rights reserved.
+ *
+ * The list of contributors can be found at:
+ *   https://github.com/dartsim/dart/blob/master/LICENSE
+ *
+ * This file is provided under the following "BSD-style" License:
+ *   Redistribution and use in source and binary forms, with or
+ *   without modification, are permitted provided that the following
+ *   conditions are met:
+ *   * Redistributions of source code must retain the above copyright
+ *     notice, this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above
+ *     copyright notice, this list of conditions and the following
+ *     disclaimer in the documentation and/or other materials provided
+ *     with the distribution.
+ *   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+ *   CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ *   INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ *   MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ *   DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ *   CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ *   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ *   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
+ *   USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED
+ *   AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ *   LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
+ *   ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *   POSSIBILITY OF SUCH DAMAGE.
+ */
+
+#include "dart/constraint/ConstraintSolver.hpp"
+
+#include "dart/collision/CollisionFilter.hpp"
+#include "dart/collision/CollisionGroup.hpp"
+#include "dart/collision/CollisionObject.hpp"
+#include "dart/collision/Contact.hpp"
+#include "dart/collision/dart/DARTCollisionDetector.hpp"
+#include "dart/common/Console.hpp"
+#include "dart/constraint/ConstrainedGroup.hpp"
+#include "dart/constraint/ContactConstraint.hpp"
+#include "dart/constraint/JointCoulombFrictionConstraint.hpp"
+#include "dart/constraint/JointLimitConstraint.hpp"
+#include "dart/constraint/LCPSolver.hpp"
+#include "dart/constraint/MimicMotorConstraint.hpp"
+#include "dart/constraint/ServoMotorConstraint.hpp"
+#include "dart/constraint/SoftContactConstraint.hpp"
+#include "dart/dynamics/BodyNode.hpp"
+#include "dart/dynamics/Joint.hpp"
+#include "dart/dynamics/Skeleton.hpp"
+#include "dart/dynamics/SoftBodyNode.hpp"
+#include "dart/neural/ConstrainedGroupGradientMatrices.hpp"
+#include "dart/neural/NeuralUtils.hpp"
+
+namespace dart {
+namespace constraint {
+
+using namespace dynamics;
+
+//==============================================================================
+ConstraintSolver::ConstraintSolver(s_t timeStep)
+  : mCollisionDetector(collision::DARTCollisionDetector::create()),
+    mCollisionGroup(mCollisionDetector->createCollisionGroupAsSharedPtr()),
+    mCollisionOption(collision::CollisionOption(
+        true, 1000u, std::make_shared<collision::BodyNodeCollisionFilter>())),
+    mTimeStep(timeStep),
+    mGradientEnabled(false), // Default to no gradients
+    mPenetrationCorrectionEnabled(
+        true), // Default to no penetration correction, because it breaks our
+                // gradients
+    mContactClippingDepth(
+        0.03) // Default to clipping only after fairly deep penetration
+{
+  assert(timeStep > 0.0);
+}
+
+//==============================================================================
+ConstraintSolver::ConstraintSolver()
+  : mCollisionDetector(collision::DARTCollisionDetector::create()),
+    mCollisionGroup(mCollisionDetector->createCollisionGroupAsSharedPtr()),
+    mCollisionOption(collision::CollisionOption(
+        true, 1000u, std::make_shared<collision::BodyNodeCollisionFilter>())),
+    mTimeStep(0.001),
+    mDebug(false),
+    mGradientEnabled(false), // Default to no gradients
+    mPenetrationCorrectionEnabled(
+        true), // Default to no penetration correction, because it breaks our
+                // gradients
+    mContactClippingDepth(
+        0.03), // Default to clipping only after fairly deep penetration
+    mEnforceContactAndJointAndCustomConstraintsFn([this]() {
+      return enforceContactAndJointAndCustomConstraintsWithLcp();
+    })
+{
+}
+
+//==============================================================================
+void ConstraintSolver::addSkeleton(const SkeletonPtr& skeleton)
+{
+  assert(
+      skeleton
+      && "Null pointer skeleton is now allowed to add to ConstraintSover.");
+
+  if (containSkeleton(skeleton))
+  {
+    dtwarn << "[ConstraintSolver::addSkeleton] Attempting to add "
+           << "skeleton '" << skeleton->getName()
+           << "', which already exists in the ConstraintSolver.\n";
+
+    return;
+  }
+
+  mCollisionGroup->subscribeTo(skeleton);
+  mSkeletons.push_back(skeleton);
+  mConstrainedGroups.reserve(mSkeletons.size());
+}
+
+//==============================================================================
+void ConstraintSolver::addSkeletons(const std::vector<SkeletonPtr>& skeletons)
+{
+  for (const auto& skeleton : skeletons)
+    addSkeleton(skeleton);
+}
+
+//==============================================================================
+const std::vector<SkeletonPtr>& ConstraintSolver::getSkeletons() const
+{
+  return mSkeletons;
+}
+
+//==============================================================================
+void ConstraintSolver::removeSkeleton(const SkeletonPtr& skeleton)
+{
+  assert(
+      skeleton
+      && "Null pointer skeleton is now allowed to add to ConstraintSover.");
+
+  if (!containSkeleton(skeleton))
+  {
+    dtwarn << "[ConstraintSolver::removeSkeleton] Attempting to remove "
+           << "skeleton '" << skeleton->getName()
+           << "', which doesn't exist in the ConstraintSolver.\n";
+  }
+
+  mCollisionGroup->removeShapeFramesOf(skeleton.get());
+  mSkeletons.erase(
+      remove(mSkeletons.begin(), mSkeletons.end(), skeleton), mSkeletons.end());
+  mConstrainedGroups.reserve(mSkeletons.size());
+}
+
+//==============================================================================
+void ConstraintSolver::removeSkeletons(
+    const std::vector<SkeletonPtr>& skeletons)
+{
+  for (const auto& skeleton : skeletons)
+    removeSkeleton(skeleton);
+}
+
+//==============================================================================
+void ConstraintSolver::removeAllSkeletons()
+{
+  mCollisionGroup->removeAllShapeFrames();
+  mSkeletons.clear();
+}
+
+//==============================================================================
+void ConstraintSolver::addConstraint(const ConstraintBasePtr& constraint)
+{
+  assert(constraint);
+
+  if (containConstraint(constraint))
+  {
+    dtwarn << "Constraint solver already contains constraint that you are "
+           << "trying to add." << std::endl;
+    return;
+  }
+
+  mManualConstraints.push_back(constraint);
+}
+
+//==============================================================================
+void ConstraintSolver::removeConstraint(const ConstraintBasePtr& constraint)
+{
+  assert(constraint);
+
+  if (!containConstraint(constraint))
+  {
+    dtwarn << "Constraint solver deos not contain constraint that you are "
+           << "trying to remove." << std::endl;
+    return;
+  }
+
+  mManualConstraints.erase(
+      remove(mManualConstraints.begin(), mManualConstraints.end(), constraint),
+      mManualConstraints.end());
+}
+
+//==============================================================================
+void ConstraintSolver::removeAllConstraints()
+{
+  mManualConstraints.clear();
+}
+
+//==============================================================================
+std::size_t ConstraintSolver::getNumConstraints() const
+{
+  return mManualConstraints.size();
+}
+
+//==============================================================================
+ConstraintBasePtr ConstraintSolver::getConstraint(std::size_t index)
+{
+  return mManualConstraints[index];
+}
+
+//==============================================================================
+ConstConstraintBasePtr ConstraintSolver::getConstraint(std::size_t index) const
+{
+  return mManualConstraints[index];
+}
+
+//==============================================================================
+std::vector<ConstraintBasePtr> ConstraintSolver::getConstraints()
+{
+  // Return a copy of constraint list not to expose the implementation detail
+  // that the constraint pointers are held in a vector, in case we want to
+  // change this implementation in the future.
+  return mManualConstraints;
+}
+
+//==============================================================================
+std::vector<ConstConstraintBasePtr> ConstraintSolver::getConstraints() const
+{
+  std::vector<ConstConstraintBasePtr> constraints;
+  constraints.reserve(mManualConstraints.size());
+  for (auto constraint : mManualConstraints)
+    constraints.push_back(constraint);
+
+  return constraints;
+}
+
+//==============================================================================
+const std::vector<ConstrainedGroup>& ConstraintSolver::getConstrainedGroups()
+    const
+{
+  return mConstrainedGroups;
+}
+
+//==============================================================================
+std::size_t ConstraintSolver::getNumConstrainedGroups() const
+{
+  return mConstrainedGroups.size();
+}
+
+//==============================================================================
+void ConstraintSolver::clearLastCollisionResult()
+{
+  mCollisionResult.clear();
+}
+
+//==============================================================================
+void ConstraintSolver::setTimeStep(s_t _timeStep)
+{
+  assert(_timeStep > 0.0 && "Time step should be positive value.");
+  mTimeStep = _timeStep;
+}
+
+//==============================================================================
+s_t ConstraintSolver::getTimeStep() const
+{
+  return mTimeStep;
+}
+
+//==============================================================================
+void ConstraintSolver::setCollisionDetector(
+    collision::CollisionDetector* collisionDetector)
+{
+  setCollisionDetector(
+      std::unique_ptr<collision::CollisionDetector>(collisionDetector));
+}
+
+//==============================================================================
+void ConstraintSolver::setCollisionDetector(
+    const std::shared_ptr<collision::CollisionDetector>& collisionDetector)
+{
+  if (!collisionDetector)
+  {
+    dtwarn << "[ConstraintSolver::setCollisionDetector] Attempting to assign "
+           << "nullptr as the new collision detector to the constraint solver, "
+           << "which is not allowed. Ignoring.\n";
+    return;
+  }
+
+  if (mCollisionDetector == collisionDetector)
+    return;
+
+  mCollisionDetector = collisionDetector;
+
+  mCollisionGroup = mCollisionDetector->createCollisionGroupAsSharedPtr();
+
+  for (const auto& skeleton : mSkeletons)
+    mCollisionGroup->addShapeFramesOf(skeleton.get());
+}
+
+//==============================================================================
+collision::CollisionDetectorPtr ConstraintSolver::getCollisionDetector()
+{
+  return mCollisionDetector;
+}
+
+//==============================================================================
+collision::ConstCollisionDetectorPtr ConstraintSolver::getCollisionDetector()
+    const
+{
+  return mCollisionDetector;
+}
+
+//==============================================================================
+collision::CollisionGroupPtr ConstraintSolver::getCollisionGroup()
+{
+  return mCollisionGroup;
+}
+
+//==============================================================================
+collision::ConstCollisionGroupPtr ConstraintSolver::getCollisionGroup() const
+{
+  return mCollisionGroup;
+}
+
+//==============================================================================
+collision::CollisionOption& ConstraintSolver::getCollisionOption()
+{
+  return mCollisionOption;
+}
+
+//==============================================================================
+const collision::CollisionOption& ConstraintSolver::getCollisionOption() const
+{
+  return mCollisionOption;
+}
+
+//==============================================================================
+collision::CollisionResult& ConstraintSolver::getLastCollisionResult()
+{
+  return mCollisionResult;
+}
+
+//==============================================================================
+const collision::CollisionResult& ConstraintSolver::getLastCollisionResult()
+    const
+{
+  return mCollisionResult;
+}
+
+//==============================================================================
+void ConstraintSolver::setLCPSolver(std::unique_ptr<LCPSolver> /*lcpSolver*/)
+{
+  dtwarn << "[ConstraintSolver::setLCPSolver] This function is deprecated in "
+         << "DART 6.7. Please use "
+         << "BoxedLcpConstraintSolver::setBoxedLcpSolver() instead. "
+         << "Doing nothing.";
+}
+
+//==============================================================================
+LCPSolver* ConstraintSolver::getLCPSolver() const
+{
+  dtwarn << "[ConstraintSolver::getLCPSolver] This function is deprecated in "
+         << "DART 6.7. Please use "
+         << "BoxedLcpConstraintSolver::getBoxedLcpSolver() instead. "
+         << "Returning nullptr.";
+
+  return nullptr;
+}
+
+//==============================================================================
+void ConstraintSolver::solve()
+{
+  mEnforceContactAndJointAndCustomConstraintsFn();
+}
+
+//==============================================================================
+void ConstraintSolver::replaceEnforceContactAndJointAndCustomConstraintsFn(
+    const enforceContactAndJointAndCustomConstraintsFnType& f)
+{
+  dtwarn << "[ConstraintSolver::"
+            "replaceEnforceContactAndJointAndCustomConstraintsFn] WARNING: "
+            "GRADIENTS WILL "
+         << "BE INCORRECT!!!! Nimble is still under heavy development, and we "
+         << "don't yet support differentiating through `timestep()` if you've "
+         << "called `replaceEnforceContactAndJointAndCustomConstraintsFn()` to "
+            "customize the solve function.";
+  mEnforceContactAndJointAndCustomConstraintsFn = f;
+}
+
+//==============================================================================
+void ConstraintSolver::enforceContactAndJointAndCustomConstraintsWithLcp()
+{
+  for (auto& skeleton : mSkeletons)
+  {
+    skeleton->clearConstraintImpulses();
+    DART_SUPPRESS_DEPRECATED_BEGIN
+    skeleton->clearCollidingBodies();
+    DART_SUPPRESS_DEPRECATED_END
+  }
+
+  // Update constraints and collect active constraints
+  updateConstraints();
+
+  // Build constrained groups
+  buildConstrainedGroups();
+
+  // Solve constrained groups
+  solveConstrainedGroups();
+}
+
+//==============================================================================
+void ConstraintSolver::setFromOtherConstraintSolver(
+    const ConstraintSolver& other)
+{
+  removeAllSkeletons();
+  mManualConstraints.clear();
+
+  addSkeletons(other.getSkeletons());
+  mManualConstraints = other.mManualConstraints;
+}
+
+//==============================================================================
+bool ConstraintSolver::getGradientEnabled()
+{
+  return mGradientEnabled;
+}
+
+//==============================================================================
+void ConstraintSolver::setGradientEnabled(bool enabled)
+{
+  mGradientEnabled = enabled;
+}
+
+//==============================================================================
+void ConstraintSolver::setPenetrationCorrectionEnabled(bool enable)
+{
+  mPenetrationCorrectionEnabled = enable;
+}
+
+//==============================================================================
+bool ConstraintSolver::getPenetrationCorrectionEnabled()
+{
+  return mPenetrationCorrectionEnabled;
+}
+
+//==============================================================================
+void ConstraintSolver::setFallbackConstraintForceMixingConstant(s_t constant)
+{
+  mFallbackConstraintForceMixingConstant = constant;
+}
+
+//==============================================================================
+Eigen::VectorXs ConstraintSolver::getCachedLCPSolution()
+{
+  assert(false && "You should never call getCachedLCPSolution() on the root ConstraintSolver, only on BoxedLCPConstraintSolver!");
+  return Eigen::VectorXs::Zero(0);
+}
+
+//==============================================================================
+void ConstraintSolver::setCachedLCPSolution(Eigen::VectorXs /* X */)
+{
+  assert(false && "You should never call setCachedLCPSolution() on the root ConstraintSolver, only on BoxedLCPConstraintSolver!");
+}
+
+//==============================================================================
+void ConstraintSolver::setContactClippingDepth(s_t depth)
+{
+  mContactClippingDepth = depth;
+  mCollisionOption.contactClippingDepth = depth;
+}
+
+//==============================================================================
+s_t ConstraintSolver::getContactClippingDepth()
+{
+  return mContactClippingDepth;
+}
+
+//==============================================================================
+bool ConstraintSolver::containSkeleton(const ConstSkeletonPtr& _skeleton) const
+{
+  assert(
+      _skeleton != nullptr && "Not allowed to insert null pointer skeleton.");
+
+  for (std::vector<SkeletonPtr>::const_iterator it = mSkeletons.begin();
+       it != mSkeletons.end();
+       ++it)
+  {
+    if ((*it) == _skeleton)
+      return true;
+  }
+
+  return false;
+}
+
+//==============================================================================
+bool ConstraintSolver::checkAndAddSkeleton(const SkeletonPtr& skeleton)
+{
+  if (!containSkeleton(skeleton))
+  {
+    mSkeletons.push_back(skeleton);
+    return true;
+  }
+  else
+  {
+    dtwarn << "Skeleton [" << skeleton->getName()
+           << "] is already in ConstraintSolver." << std::endl;
+    return false;
+  }
+}
+
+//==============================================================================
+bool ConstraintSolver::containConstraint(
+    const ConstConstraintBasePtr& constraint) const
+{
+  return std::find(
+             mManualConstraints.begin(), mManualConstraints.end(), constraint)
+         != mManualConstraints.end();
+}
+
+//==============================================================================
+bool ConstraintSolver::checkAndAddConstraint(
+    const ConstraintBasePtr& constraint)
+{
+  if (!containConstraint(constraint))
+  {
+    mManualConstraints.push_back(constraint);
+    return true;
+  }
+  else
+  {
+    dtwarn << "Constraint is already in ConstraintSolver." << std::endl;
+    return false;
+  }
+}
+
+//==============================================================================
+double ConstraintSolver::maxDepth(bool print)
+{
+  return mCollisionGroup->maxDepth(mCollisionOption, print);
+}
+
+double ConstraintSolver::toi(double currentDepth)
+{
+  return mCollisionGroup->toi(mCollisionOption, currentDepth);
+}
+
+void ConstraintSolver::setDebug(bool debug)
+{
+		mDebug = debug;
+}
+
+//==============================================================================
+void ConstraintSolver::updateConstraints()
+{
+  // Clear previous active constraint list
+  mActiveConstraints.clear();
+
+  //----------------------------------------------------------------------------
+  // Update manual constraints
+  //----------------------------------------------------------------------------
+  for (auto& manualConstraint : mManualConstraints)
+  {
+    manualConstraint->update();
+
+    if (manualConstraint->isActive())
+      mActiveConstraints.push_back(manualConstraint);
+  }
+
+  //----------------------------------------------------------------------------
+  // Update automatic constraints: contact constraints
+  //----------------------------------------------------------------------------
+  mCollisionResult.clear();
+
+  mCollisionGroup->collide(mCollisionOption, &mCollisionResult);
+
+  // Destroy previous contact constraints
+  mContactConstraints.clear();
+
+  // Destroy previous soft contact constraints
+  mSoftContactConstraints.clear();
+
+  int idxContact = 0;
+  // Create new contact constraints
+  for (auto i = 0u; i < mCollisionResult.getNumContacts(); ++i)
+  {
+    auto& contact = mCollisionResult.getContact(i);
+
+    if (collision::Contact::isZeroNormal(contact.normal))
+    {
+      // Skip this contact. This is because we assume that a contact with
+      // zero-length normal is invalid.
+      continue;
+    }
+
+    // Set colliding bodies
+    auto shapeFrame1 = const_cast<dynamics::ShapeFrame*>(
+        contact.collisionObject1->getShapeFrame());
+    auto shapeFrame2 = const_cast<dynamics::ShapeFrame*>(
+        contact.collisionObject2->getShapeFrame());
+
+    DART_SUPPRESS_DEPRECATED_BEGIN
+    shapeFrame1->asShapeNode()->getBodyNodePtr()->setColliding(true);
+    shapeFrame2->asShapeNode()->getBodyNodePtr()->setColliding(true);
+    DART_SUPPRESS_DEPRECATED_END
+
+    // If penetration depth is negative, then the collision isn't really
+    // happening and the contact point should be ignored.
+    // TODO(MXG): Investigate ways to leverage the proximity information of a
+    //            negative penetration to improve collision handling.
+    if (contact.penetrationDepth < 0.0)
+      continue;
+    if (contact.penetrationDepth > mContactClippingDepth)
+      continue;
+
+    if (isSoftContact(contact))
+    {
+      mSoftContactConstraints.push_back(
+          std::make_shared<SoftContactConstraint>(contact, mTimeStep));
+    }
+    else
+    {
+      mContactConstraints.push_back(std::make_shared<ContactConstraint>(
+          contact, mTimeStep, mPenetrationCorrectionEnabled));
+    }
+
+    idxContact += 1;
+				if (mDebug)
+				{
+						std::cerr<<"\nContact: "<<idxContact<<std::endl;
+						std::cerr<<"Body1: "<<contact.getBodyName1()<<" Body2: "<<contact.getBodyName2()<<std::endl;
+						std::cerr<<"Point: "<<contact.point.transpose()<<std::endl;
+						std::cerr<<"Normal: "<<contact.normal.transpose()<<std::endl;
+						std::cerr<<"Depth: "<<contact.penetrationDepth<<std::endl;
+				}
+  }
+
+  // Add the new contact constraints to dynamic constraint list
+  for (const auto& contactConstraint : mContactConstraints)
+  {
+    contactConstraint->update();
+
+    if (contactConstraint->isActive())
+      mActiveConstraints.push_back(contactConstraint);
+  }
+
+  // Add the new soft contact constraints to dynamic constraint list
+  for (const auto& softContactConstraint : mSoftContactConstraints)
+  {
+    softContactConstraint->update();
+
+    if (softContactConstraint->isActive())
+      mActiveConstraints.push_back(softContactConstraint);
+  }
+
+  if (mDebug)
+  {
+    std::cerr<<"\nNumber of contacts: "<<mActiveConstraints.size()<<std::endl;
+  }
+
+  //----------------------------------------------------------------------------
+  // Update automatic constraints: joint constraints
+  //----------------------------------------------------------------------------
+  // Destroy previous joint constraints
+  mJointLimitConstraints.clear();
+  mServoMotorConstraints.clear();
+  mMimicMotorConstraints.clear();
+  mJointCoulombFrictionConstraints.clear();
+
+  // // Create new joint constraints
+  // for (const auto& skel : mSkeletons)
+  // {
+  //   const std::size_t numJoints = skel->getNumJoints();
+  //   for (std::size_t i = 0; i < numJoints; i++)
+  //   {
+  //     dynamics::Joint* joint = skel->getJoint(i);
+
+  //     if (joint->isKinematic())
+  //       continue;
+
+  //     const std::size_t dof = joint->getNumDofs();
+  //     for (std::size_t j = 0; j < dof; ++j)
+  //     {
+  //       if (joint->getCoulombFriction(j) != 0.0)
+  //       {
+  //         mJointCoulombFrictionConstraints.push_back(
+  //             std::make_shared<JointCoulombFrictionConstraint>(joint));
+  //         break;
+  //       }
+  //     }
+
+  //     if (joint->isPositionLimitEnforced())
+  //     {
+  //       mJointLimitConstraints.push_back(
+  //           std::make_shared<JointLimitConstraint>(joint));
+  //     }
+
+  //     if (joint->getActuatorType() == dynamics::Joint::SERVO)
+  //     {
+  //       mServoMotorConstraints.push_back(
+  //           std::make_shared<ServoMotorConstraint>(joint));
+  //     }
+
+  //     if (joint->getActuatorType() == dynamics::Joint::MIMIC
+  //         && joint->getMimicJoint())
+  //     {
+  //       mMimicMotorConstraints.push_back(std::make_shared<MimicMotorConstraint>(
+  //           joint,
+  //           joint->getMimicJoint(),
+  //           joint->getMimicMultiplier(),
+  //           joint->getMimicOffset()));
+  //     }
+  //   }
+  // }
+
+  // if (mDebug)
+  // {
+  //   std::cerr<<"\nNumber of contacts: "<<mActiveConstraints.size()<<std::endl;
+  // }
+
+  // // Add active joint limit
+  // for (auto& jointLimitConstraint : mJointLimitConstraints)
+  // {
+  //   jointLimitConstraint->update();
+
+  //   if (jointLimitConstraint->isActive())
+  //     mActiveConstraints.push_back(jointLimitConstraint);
+  // }
+
+  // if (mDebug)
+  // {
+  //   std::cerr<<"\nNumber of contacts: "<<mActiveConstraints.size()<<std::endl;
+  // }
+
+  // for (auto& servoMotorConstraint : mServoMotorConstraints)
+  // {
+  //   servoMotorConstraint->update();
+
+  //   if (servoMotorConstraint->isActive())
+  //     mActiveConstraints.push_back(servoMotorConstraint);
+  // }
+
+  // if (mDebug)
+  // {
+  //   std::cerr<<"\nNumber of contacts: "<<mActiveConstraints.size()<<std::endl;
+  // }
+
+  // for (auto& mimicMotorConstraint : mMimicMotorConstraints)
+  // {
+  //   mimicMotorConstraint->update();
+
+  //   if (mimicMotorConstraint->isActive())
+  //     mActiveConstraints.push_back(mimicMotorConstraint);
+  // }
+
+  // if (mDebug)
+  // {
+  //   std::cerr<<"\nNumber of contacts: "<<mActiveConstraints.size()<<std::endl;
+  // }
+
+  // for (auto& jointFrictionConstraint : mJointCoulombFrictionConstraints)
+  // {
+  //   jointFrictionConstraint->update();
+
+  //   if (jointFrictionConstraint->isActive())
+  //     mActiveConstraints.push_back(jointFrictionConstraint);
+  // }
+
+  // if (mDebug)
+  // {
+  //   std::cerr<<"\nNumber of contacts: "<<mActiveConstraints.size()<<std::endl;
+  // }
+}
+
+//==============================================================================
+void ConstraintSolver::buildConstrainedGroups()
+{
+  // Clear constrained groups
+  mConstrainedGroups.clear();
+  if (mGradientEnabled)
+  {
+    for (const auto& skel : mSkeletons)
+    {
+      skel->clearGradientConstraintMatrices();
+    }
+  }
+
+  // Exit if there is no active constraint
+  if (mActiveConstraints.empty())
+    return;
+
+  //----------------------------------------------------------------------------
+  // Unite skeletons according to constraints's relationships
+  //----------------------------------------------------------------------------
+  for (const auto& activeConstraint : mActiveConstraints)
+    activeConstraint->uniteSkeletons();
+
+  //----------------------------------------------------------------------------
+  // Build constraint groups
+  //----------------------------------------------------------------------------
+  for (const auto& activeConstraint : mActiveConstraints)
+  {
+    bool found = false;
+    const auto& skel = activeConstraint->getRootSkeleton();
+
+    for (const auto& constrainedGroup : mConstrainedGroups)
+    {
+      if (constrainedGroup.mRootSkeleton == skel)
+      {
+        found = true;
+        break;
+      }
+    }
+
+    if (found)
+      continue;
+
+    ConstrainedGroup newConstGroup;
+    newConstGroup.mRootSkeleton = skel;
+    skel->mUnionIndex = mConstrainedGroups.size();
+    mConstrainedGroups.push_back(newConstGroup);
+  }
+
+  // Add active constraints to constrained groups
+  for (const auto& activeConstraint : mActiveConstraints)
+  {
+    const auto& skel = activeConstraint->getRootSkeleton();
+    mConstrainedGroups[skel->mUnionIndex].addConstraint(activeConstraint);
+  }
+
+  // Create the gradient matrices for this gradient mode
+  if (mGradientEnabled)
+  {
+    for (auto& constrainedGroup : mConstrainedGroups)
+    {
+      auto m = neural::createGradientMatrices(constrainedGroup, mTimeStep);
+      constrainedGroup.setGradientConstraintMatrices(m);
+    }
+  }
+
+  //----------------------------------------------------------------------------
+  // Reset union since we don't need union information anymore.
+  //----------------------------------------------------------------------------
+  for (auto& skeleton : mSkeletons)
+    skeleton->resetUnion();
+}
+
+//==============================================================================
+void ConstraintSolver::solveConstrainedGroups()
+{
+  for (auto& constraintGroup : mConstrainedGroups)
+  {
+    // Build LCP terms by aggregating them from constraints
+    const std::size_t n = constraintGroup.getTotalDimension();
+
+    // If there are no constraints, then we are done with the group.
+    if (0u == n)
+      continue;
+
+    std::vector<s_t*> impulses = solveConstrainedGroup(constraintGroup);
+    
+    // std::cout<<"Whole Impulse Solution is "<<mImpulseSolution<<std::endl;
+    applyConstraintImpulses(constraintGroup.getConstraints(), impulses);
+  }
+}
+
+//==============================================================================
+void ConstraintSolver::applyConstraintImpulses(
+    std::vector<ConstraintBasePtr> constraints, std::vector<s_t*> impulses)
+{
+  const std::size_t numConstraints = constraints.size();
+  for (std::size_t i = 0; i < numConstraints; ++i)
+  {
+    const ConstraintBasePtr& constraint = constraints[i];
+    constraint->applyImpulse(impulses[i]);
+    constraint->excite();
+  }
+}
+
+//==============================================================================
+bool ConstraintSolver::isSoftContact(const collision::Contact& contact) const
+{
+  auto* shapeNode1 = contact.collisionObject1->getShapeFrame()->asShapeNode();
+  auto* shapeNode2 = contact.collisionObject2->getShapeFrame()->asShapeNode();
+  assert(shapeNode1);
+  assert(shapeNode2);
+
+  auto* bodyNode1 = shapeNode1->getBodyNodePtr().get();
+  auto* bodyNode2 = shapeNode2->getBodyNodePtr().get();
+
+  auto bodyNode1IsSoft
+      = dynamic_cast<const dynamics::SoftBodyNode*>(bodyNode1) != nullptr;
+
+  auto bodyNode2IsSoft
+      = dynamic_cast<const dynamics::SoftBodyNode*>(bodyNode2) != nullptr;
+
+  return bodyNode1IsSoft || bodyNode2IsSoft;
+}
+
+//==============================================================================
+std::pair<Eigen::VectorXd, std::vector<ContactInfoOnABody>>
+  ConstraintSolver::calculateWrenchImpulse(std::string& name)
+{
+  mImpulseSolution = getCachedLCPSolution();
+  Eigen::VectorXd wrenchImpulse = Eigen::VectorXd::Zero(6);
+  Eigen::MatrixXd spatialJacobian;
+  int cotactNumber = mContactConstraints.size();
+  int impulseIndex = 0;
+  Eigen::VectorXd contactImpulse;
+  std::pair<Eigen::VectorXd, std::vector<ContactInfoOnABody>> ret;
+  ret.first = Eigen::VectorXd::Zero(6);
+
+  for (int i = 0; i < cotactNumber; i++)
+  {
+    const auto& constraint = mContactConstraints[i];
+    if (!constraint->isActive()) 
+      continue;
+
+    if (constraint->getBodyNodeA()->getName() == name) 
+    {
+      spatialJacobian = constraint->getSpatialNormalA();
+    }
+    else if (constraint->getBodyNodeB()->getName() == name) 
+    {
+      spatialJacobian = constraint->getSpatialNormalB();
+    }
+    else
+      continue;
+    // std::cout<<"Spatial Jacobian is "<<spatialJacobian<<std::endl;
+
+    // Friction check need more notice
+    if (constraint->isFrictionOn())
+    {
+      contactImpulse = mImpulseSolution.segment(impulseIndex, 3);
+      // std::cout<<"Contact Impulse is "<<contactImpulse<<std::endl;
+      ret.first += spatialJacobian * contactImpulse;
+      impulseIndex += 3;
+    }
+    else 
+    {
+      contactImpulse = mImpulseSolution.segment(impulseIndex, 1);
+      // std::cout<<"Contact Impulse is "<<contactImpulse<<std::endl;
+      ret.first += spatialJacobian * contactImpulse;
+      impulseIndex += 1;
+    }
+    ContactInfoOnABody contact_info;
+    contact_info.index = i;
+    contact_info.spatialJacobian = spatialJacobian;
+    ret.second.push_back(contact_info);
+  }
+
+  return ret;
+}
+
+} // namespace constraint
+} // namespace dart

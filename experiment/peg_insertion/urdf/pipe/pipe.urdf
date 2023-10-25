@@ -1,0 +1,372 @@
+<?xml version="1.0"?>
+<robot name="pipe_skeleton">
+    <link name="base" />
+    <joint name="pipe_joint0" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 1.57" />
+        <parent link="base" />
+        <child link="pipe_link0" />
+    </joint>
+    <link name="pipe_link0">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="pipe_joint1" type="revolute">
+        <origin rpy="0 0 0" xyz="0 -0.0 0"/>
+        <parent link="pipe_link0"/>
+        <child link="v1"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="v1">
+        <inertial>
+            <mass value="0.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+    </link>
+    <joint name="pipe_joint1v" type="revolute">
+        <origin rpy="0 0 0" xyz="0 0 0.0"/>
+        <parent link="v1"/>
+        <child link="pipe_link1"/>
+        <axis xyz="1 0 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="pipe_link1">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 -0.01 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="pipe_joint2" type="revolute">
+        <origin rpy="0 0 0" xyz="0 -0.01 0"/>
+        <parent link="pipe_link1"/>
+        <child link="v2"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="v2">
+        <inertial>
+            <mass value="0.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+    </link>
+    <joint name="pipe_joint2v" type="revolute">
+        <origin rpy="0 0 0" xyz="0 0 0.0"/>
+        <parent link="v2"/>
+        <child link="pipe_link2"/>
+        <axis xyz="1 0 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="pipe_link2">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 -0.01 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="pipe_joint3" type="revolute">
+        <origin rpy="0 0 0" xyz="0 -0.01 0"/>
+        <parent link="pipe_link2"/>
+        <child link="v3"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="v3">
+        <inertial>
+            <mass value="0.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+    </link>
+    <joint name="pipe_joint3v" type="revolute">
+        <origin rpy="0 0 0" xyz="0 0 0.0"/>
+        <parent link="v3"/>
+        <child link="pipe_link3"/>
+        <axis xyz="1 0 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="pipe_link3">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 -0.01 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="pipe_joint4" type="revolute">
+        <origin rpy="0 0 0" xyz="0 -0.01 0"/>
+        <parent link="pipe_link3"/>
+        <child link="v4"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="v4">
+        <inertial>
+            <mass value="0.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+    </link>
+    <joint name="pipe_joint4v" type="revolute">
+        <origin rpy="0 0 0" xyz="0 0 0.0"/>
+        <parent link="v4"/>
+        <child link="pipe_link4"/>
+        <axis xyz="1 0 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="pipe_link4">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 -0.01 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </collision>
+    </link>
+    
+    <joint name="pipe_joint5" type="revolute">
+        <origin rpy="0 0 0" xyz="0 -0.01 0"/>
+        <parent link="pipe_link4"/>
+        <child link="v5"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="v5">
+        <inertial>
+            <mass value="0.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+    </link>
+    <joint name="pipe_joint5v" type="revolute">
+        <origin rpy="0 0 0" xyz="0 0 0.0"/>
+        <parent link="v5"/>
+        <child link="pipe_link5"/>
+        <axis xyz="1 0 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="pipe_link5">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 -0.01 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="pipe_joint6" type="revolute">
+        <origin rpy="0 0 0" xyz="0 -0.01 0"/>
+        <parent link="pipe_link5"/>
+        <child link="v6"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="v6">
+        <inertial>
+            <mass value="0.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+    </link>
+    <joint name="pipe_joint6v" type="revolute">
+        <origin rpy="0 0 0" xyz="0 0 0.0"/>
+        <parent link="v6"/>
+        <child link="pipe_link6"/>
+        <axis xyz="1 0 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="pipe_link6">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 -0.01 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="pipe_joint7" type="revolute">
+        <origin rpy="0 0 0" xyz="0 -0.01 0"/>
+        <parent link="pipe_link6"/>
+        <child link="v7"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="v7">
+        <inertial>
+            <mass value="0.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+    </link>
+    <joint name="pipe_joint7v" type="revolute">
+        <origin rpy="0 0 0" xyz="0 0 0.0"/>
+        <parent link="v7"/>
+        <child link="pipe_link7"/>
+        <axis xyz="1 0 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="pipe_link7">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj" scale="0.8 0.8 0.8"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 -0.01 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj" scale="0.8 0.8 0.8"/>
+            </geometry>
+        </collision>
+    </link>
+
+    <joint name="pipe_joint8" type="revolute">
+        <origin rpy="0 0 0" xyz="0 -0.01 0"/>
+        <parent link="pipe_link7"/>
+        <child link="v8"/>
+        <axis xyz="0 1 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="v8">
+        <inertial>
+            <mass value="0.0" />
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+    </link>
+    <joint name="pipe_joint8v" type="revolute">
+        <origin rpy="0 0 0" xyz="0 0 0.0"/>
+        <parent link="v8"/>
+        <child link="pipe_link8"/>
+        <axis xyz="1 0 0"/>
+        <limit effort="12" lower="-0.1001" upper="0.1001" velocity="2.6100"/>
+        <damping value="1.0"/>
+    </joint>
+    <link name="pipe_link8">
+        <inertial>
+            <mass value="0.001" />
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <inertia ixx="0.0583" ixy="0" ixz="0" iyy="0.0583" iyz="0" izz="0.05" />
+        </inertial>
+        <visual>
+            <origin xyz="0 -0.01 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj" scale="0.8 0.8 0.8"/>
+            </geometry>
+        </visual>
+        <collision>
+            <origin xyz="0 -0.01 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./pipe_2cm_vhacd.obj" scale="0.8 0.8 0.8"/>
+            </geometry>
+        </collision>
+    </link>
+</robot>

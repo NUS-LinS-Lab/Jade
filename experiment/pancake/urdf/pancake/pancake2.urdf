@@ -1,0 +1,40 @@
+<?xml version="0.0" ?>
+<robot name="pancake.urdf">
+  <link name="world" />
+  <link name="pancake">
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="pie2.obj" scale="0.8 0.8 1."/>
+        <!-- <mesh filename="pie3_v.obj" scale="1 1 2"/> -->
+<!--        <mesh filename="pancake_v.obj" scale="0.001 0.001 0.0015"/>-->
+<!--        <mesh filename="pie6_v.obj" scale="1 1 1"/>-->
+      </geometry>
+      <material name="pancake_yellow">
+        <color rgba="0.9 0.85 0.75 1.0"/>
+      </material>
+    </visual>
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.001"/>
+<!--      <inertia ixx="0.000045" ixy="0" ixz="0" iyy="0.000045" iyz="0" izz="0.00009"/>-->
+      <inertia ixx="0.0009" ixy="0" ixz="0" iyy="0.0009" iyz="0" izz="0.0018"/>
+    </inertial>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+  	    <mesh filename="pie2.obj" scale="0.8 0.8 1."/>  	   
+         <!-- <mesh filename="pie3_v.obj" scale="1 1 2"/> -->
+<!--  	    <mesh filename="pancake_v.obj" scale="0.001 0.001 0.0015"/>-->
+<!--  	    <mesh filename="pie6_v.obj" scale="1 1 1"/>-->
+      </geometry>
+    </collision>
+  </link>
+      <joint name="pancake_joint" type="floating">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="world" />
+        <child link="pancake" />
+        <!-- <axis xyz="0 0 1"/>
+        <limit effort="20" lower="0.0" upper="0.04" velocity="0.2"/> -->
+    </joint>
+</robot>

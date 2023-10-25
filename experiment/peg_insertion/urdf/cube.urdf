@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<robot name="cube_skeleton">
+    <link name="base" />
+    <link name="cube_link">
+        <inertial>
+            <mass value="0.01" />
+            <origin xyz="0.0001 0 0" rpy="0 0 0" />
+            <inertia ixx="1.0" ixy="0" ixz="0" iyy="1.0" iyz="0" izz="1.0" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <mesh filename="./cube.obj"/>
+            </geometry>
+        </visual>
+        <collision group="default">
+            <origin xyz="0.001 0 0" rpy="0 -0 0" />
+            <geometry>
+                <mesh filename="./cube.obj"/>
+            </geometry>
+        </collision>
+    </link>
+    <joint name="cube_joint" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="base" />
+        <child link="cube_link" />
+    </joint>
+</robot>
