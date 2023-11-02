@@ -1,8 +1,0 @@
-Metadata-Version: 2.1
-Name: nimblephysics
-Version: 0.7.7
-Summary: A differentiable fully featured physics engine
-Author: Keenon Werling
-Author-email: keenonwerling@gmail.com
-License: MIT
-License-File: LICENSE

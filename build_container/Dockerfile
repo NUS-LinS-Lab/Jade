@@ -268,8 +268,7 @@ ARG group=adamas
 ARG home=/home/${user}
 RUN mkdir -p /etc/sudoers.d \
     && groupadd -g ${gid} ${group} \
-    && useradd -d ${home} -u ${uid} -g ${gid} -m -s /bin/bash ${user} \
-    && echo "${user} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/sudoers_${user}
+    && useradd -d ${home} -u ${uid} -g ${gid} -m -s /bin/bash ${user}
 USER ${user}
 WORKDIR ${home}
 ENV HOME ${home}

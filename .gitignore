@@ -86,3 +86,4 @@ cmake-build-debug/
 .stignore
 .stfolder
 .stglobalignore
+/python/nimblephysics.egg-info
