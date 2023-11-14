@@ -302,7 +302,27 @@ void GUIStateMachine(py::module& m)
           &dart::server::GUIStateMachine::clearBodyWrench,
           ::py::arg("body"),
           ::py::arg("prefix") = "wrench",
+          ::py::call_guard<py::gil_scoped_release>())
+      .def(
+          "updateWorldAlembic",
+          &dart::server::GUIStateMachine::updateWorldAlembic,
+          ::py::arg("world"),
+          ::py::arg("prefix") = "world",
+          ::py::call_guard<py::gil_scoped_release>())
+      .def(
+          "renderWorldAlembic",
+          &dart::server::GUIStateMachine::renderWorldAlembic,
+          ::py::arg("world"),
+          ::py::arg("outputfile"),
+          ::py::arg("fps"),
+          ::py::call_guard<py::gil_scoped_release>())
+      .def(
+          "recordWorldAlembic",
+          &dart::server::GUIStateMachine::recordWorldAlembic,
+          ::py::arg("world"),
+          ::py::arg("frame"),
           ::py::call_guard<py::gil_scoped_release>());
+      
 }
 
 } // namespace python

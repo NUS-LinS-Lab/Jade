@@ -11,6 +11,8 @@ from tensorboardX import SummaryWriter
 
 import nimblephysics as nimble
 
+import ipdb
+
 robot_init_state = [ 0.07129488 ,-0.82724565, -2.68480527, -1.54026022 , 0.20306757,  1.29076029,
  -0.25689644,  0.0085 ,     0.0085    ]
 
@@ -23,7 +25,7 @@ def create_world(time_step=0.01):
 	return world
 
 def render(path):
-
+	# ipdb.set_trace()
 	world = create_world()
 
 	table = world.loadSkeleton("./urdf/table_real/table.urdf", np.array([0, 0, -0.002]), np.array([0, 0, 0]))
@@ -55,7 +57,7 @@ def render(path):
 		pancake_node.setFrictionCoeff(1.)
 
 	gui = nimble.NimbleGUI(world)
-	gui.serve(8080)
+	gui.serve(8090)
 	gui.nativeAPI().renderWorld(world)
 
 	states = torch.load(path)

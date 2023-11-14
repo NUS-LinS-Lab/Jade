@@ -211,13 +211,51 @@ RUN pushd ezc3d && \
     popd
 RUN rm -rf ezc3d
 
+
+################################# Alembic #################################
+# Install imath
+RUN git clone https://github.com/AcademySoftwareFoundation/Imath
+RUN pushd Imath &&\
+    git checkout v3.1.9 &&\
+    mkdir build &&\
+    pushd build &&\
+    cmake .. &&\
+    make install &&\
+    popd && popd
+RUN rm -rf Imath
+
+# Install alembic
+RUN git clone https://github.com/alembic/alembic.git
+RUN pushd alembic &&\
+    git checkout 1.8.5 &&\
+    mkdir build &&\
+    pushd build &&\
+    cmake .. &&\
+    make install &&\
+    popd && popd
+RUN rm -rf alembic
+
+RUN git clone https://github.com/opencv/opencv.git
+RUN pushd opencv &&\
+    git checkout 4.7.0 &&\
+    mkdir build &&\
+    pushd build &&\
+    cmake .. &&\
+    make -j4 &&\
+    make install &&\
+    popd && \
+    popd && \
+    rm -rf opencv 
+    
+
+###########################################################################
+
 # RUN ls /usr/local/lib64 | grep assimp
 # RUN ls /usr/local/lib | grep assimp
 # RUN rm -rf /usr/local/lib64/libassimp.so
 # RUN rm -rf /usr/local/lib64/libassimp.5.so
 # RUN rm -rf /usr/local/lib64/libassimp.5.0.1.so
 RUN protoc --version
-
 # Install spdlog
 RUN git clone https://github.com/gabime/spdlog.git
 RUN pushd spdlog &&\
@@ -229,7 +267,6 @@ RUN pushd spdlog &&\
     popd &&\
     popd
 RUN rm -rf spdlog
-
 # This is allowed to be empty string, but if it's not it must be prefixed by
 ENV VERSION="0.7.7"
 
@@ -261,15 +298,16 @@ RUN ${PYTHON} -m pip install auditwheel
 #     ${PYTHON} -m auditwheel repair dist/nimblephysics-${VERSION}-${PYTHON_VERSION}-linux_x86_64.whl
 # RUN mv /nimblephysics/wheelhouse/nimblephysics-${VERSION}-${PYTHON_VERSION}-manylinux_2_17_x86_64.manylinux2014_x86_64.whl /wheelhouse
 
-ARG uid
-ARG gid
-ARG user=adamas
-ARG group=adamas
-ARG home=/home/${user}
-RUN mkdir -p /etc/sudoers.d \
-    && groupadd -g ${gid} ${group} \
-    && useradd -d ${home} -u ${uid} -g ${gid} -m -s /bin/bash ${user}
-USER ${user}
-WORKDIR ${home}
-ENV HOME ${home}
+# ARG uid
+# ARG gid
+# ARG user=adamas
+# ARG group=adamas
+# ARG home=/home/${user}
+# RUN mkdir -p /etc/sudoers.d \
+#     && groupadd -g ${gid} ${group} \
+#     && useradd -d ${home} -u ${uid} -g ${gid} -m -s /bin/bash ${user} \
+#     && echo "${user} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/sudoers_${user}
+# USER ${user}
+# WORKDIR ${home}
+# ENV HOME ${home}
 COPY build_wheel.sh /usr/local/bin/build_wheel

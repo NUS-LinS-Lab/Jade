@@ -21,6 +21,8 @@ python/nimblephysics.egg-info/requires.txt
 python/nimblephysics.egg-info/top_level.txt
 python/nimblephysics/models/__init__.py
 python/nimblephysics/models/rajagopal.py
+python/nimblephysics/models/__pycache__/__init__.cpython-38.pyc
+python/nimblephysics/models/__pycache__/rajagopal.cpython-38.pyc
 python/nimblephysics/models/rajagopal_data/ANSUR_II_FEMALE_Public.csv
 python/nimblephysics/models/rajagopal_data/ANSUR_II_MALE_Public.csv
 python/nimblephysics/models/rajagopal_data/ANSUR_Rajagopal_metrics.xml

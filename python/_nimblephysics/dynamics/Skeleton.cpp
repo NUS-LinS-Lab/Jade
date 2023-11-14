@@ -133,6 +133,12 @@ void Skeleton(py::module& m)
           &dynamics::Skeleton::ContactInverseDynamicsResult::jointTorques)
       .def_readwrite(
           "pos", &dynamics::Skeleton::ContactInverseDynamicsResult::pos)
+    //   .def_readwrite(
+    //       "base_pos", &dynamics::Skeleton::ContactInverseDynamicsResult::base_pos)
+    //   .def_readwrite(
+    //       "urdf_path", &dynamics::Skeleton::ContactInverseDynamicsResult::urdf_path)    // 用于读写的属性
+    //   .def_readwrite(
+    //       "euler_angle", &dynamics::Skeleton::ContactInverseDynamicsResult::euler_angle)
       .def_readwrite(
           "vel", &dynamics::Skeleton::ContactInverseDynamicsResult::vel)
       .def_readwrite(
@@ -165,6 +171,12 @@ void Skeleton(py::module& m)
               jointTorques)
       .def_readwrite(
           "pos", &dynamics::Skeleton::MultipleContactInverseDynamicsResult::pos)
+    //   .def_readwrite(
+    //       "base_pos", &dynamics::Skeleton::ContactInverseDynamicsResult::base_pos)
+    //   .def_readwrite(
+    //       "urdf_path", &dynamics::Skeleton::MultipleContactInverseDynamicsResult::urdf_path)
+    //   .def_readwrite(
+    //       "euler_angle", &dynamics::Skeleton::MultipleContactInverseDynamicsResult::euler_angle)
       .def_readwrite(
           "vel", &dynamics::Skeleton::MultipleContactInverseDynamicsResult::vel)
       .def_readwrite(
@@ -251,6 +263,42 @@ void Skeleton(py::module& m)
                 return dart::dynamics::Skeleton::create(properties);
               }),
           ::py::arg("properties"))
+      .def(
+          "getBasePos",
+          +[](dart::dynamics::Skeleton* self) -> Eigen::Vector3s {      // 实现在 dart/dynamics/Skeleton.cpp
+            return self->getBasePos();
+          })
+      .def(
+          "getEulerAngle",
+          +[](dart::dynamics::Skeleton* self) -> Eigen::Vector3s {
+            return self->getEulerAngle();
+          })
+      .def(
+          "getURDFPath",
+          +[](dart::dynamics::Skeleton* self) -> std::string {
+            return self->getURDFPath();
+          })
+      .def(
+          "setBasePos",
+          +[](dart::dynamics::Skeleton* self,
+              Eigen::Vector3s base_pos) -> void {
+            return self->setBasePos(base_pos);
+          },
+          ::py::arg("base_pos"))
+      .def(
+          "setEulerAngle",
+          +[](dart::dynamics::Skeleton* self,
+              Eigen::Vector3s euler_angle) -> void {
+            return self->setEulerAngle(euler_angle);
+          },
+          ::py::arg("euler_angle"))
+      .def(
+          "setURDFPath",
+          +[](dart::dynamics::Skeleton* self, 
+              std::string urdf_path) -> void {
+            return self->setURDFPath(urdf_path);
+          },
+          ::py::arg("urdf_path"))
       .def(
           "getPtr",
           +[](dart::dynamics::Skeleton* self) -> dart::dynamics::SkeletonPtr {

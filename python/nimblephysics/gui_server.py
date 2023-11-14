@@ -9,6 +9,9 @@ import threading
 from typing import List
 import torch
 import numpy as np
+import math
+import pybullet as p
+import pybullet_data
 
 
 file_path = os.path.join(pathlib.Path(__file__).parent.absolute(), 'web_gui')
@@ -105,6 +108,38 @@ class NimbleGUI:
         self.i += 1
       else:
         self.i = 0
+
+  def test(self):
+    print("world dir:\n", dir(self.world))
+
+    print("skeleton dir:\n", dir(self.world.getSkeleton(0)))
+    
+    for i in range(self.world.getNumSkeletons()):
+      skel = self.world.getSkeleton(i)
+      print("i = {}".format(i))
+      print(skel)
+      print("name = {}".format(skel.getName()))
+      # print("pos = {}".format(self.world.getPositions()))   # robot init state
+      print("pos = {}".format(skel.getPositions()))           # 似乎没有存name和pos和angle，可以在dart/utils/UniversalLoader.cpp那里存，然后再读取
+      print("pos1 = {}".format(skel.getBasePos()))
+      skel.setBasePos(np.array([-0.39, 0.075, 0.0]))
+      print("pos2 = {}".format(skel.getBasePos()))
+      print("angle1 = {}".format(skel.getEulerAngle()))
+      skel.setEulerAngle(np.array([0, 0, math.pi / 2]))
+      print("angle2 = {}".format(skel.getEulerAngle()))
+      print("urdf1 = {}".format(skel.getURDFPath()))
+      skel.setURDFPath("./urdf/pancake/pancake2.urdf")
+      print("urdf2 = {}".format(skel.getURDFPath()))
+      
+  def render_bullet_init(self):
+    physicsClient = p.connect(p.GUI)
+    p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+    p.setAdditionalSearchPath(pybullet_data.getDataPath())
+
+    p.setTimeStep(0.01)
+    p.setGravity(0, 0, 0)
+    
+    urdfFlags = p.URDF_USE_SELF_COLLISION
 
   def _onConnect(self):
     self.ticker.start()

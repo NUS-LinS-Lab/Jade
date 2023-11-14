@@ -1,6 +1,7 @@
 #ifndef DART_GUI_STATE_MACHINE
 #define DART_GUI_STATE_MACHINE
 
+#include <cmath>
 #include <condition_variable>
 #include <functional>
 #include <memory>
@@ -12,15 +13,23 @@
 #include <unordered_set>
 #include <vector>
 
+#include <Alembic/AbcCoreOgawa/All.h>
+#include <Alembic/AbcGeom/All.h>
 #include <Eigen/Dense>
 #include <asio/io_service.hpp>
 #include <assimp/Importer.hpp>
 #include <assimp/cimport.h>
 #include <assimp/postprocess.h>
+#include <opencv2/core/mat.hpp>
+#include <opencv2/core/matx.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/opencv.hpp>
 
 #include "dart/dynamics/BodyNode.hpp"
 #include "dart/dynamics/MeshShape.hpp"
 #include "dart/server/WebsocketServer.hpp"
+
+using namespace Alembic::AbcGeom;
 
 namespace dart {
 
@@ -394,6 +403,81 @@ export type SetRichPlotBounds = {
 
   /// This deletes a UI element by key
   void deleteUIElement(const std::string& key);
+
+  /// Edited:
+  /// Added functions for Alembic Exporter
+  void updateWorldAlembic(
+      const std::shared_ptr<simulation::World>& world,
+      const std::string& prefix);
+
+  void renderWorldAlembic(
+      const std::shared_ptr<simulation::World>& world,
+      string outputfile,
+      float fps);
+
+  void updateSkeletonAlembic(
+      const std::shared_ptr<dynamics::Skeleton>& skel,
+      const std::string& prefix,
+      Eigen::Vector4s overrideColor);
+
+  void renderSkeletonAlembic(
+      const std::shared_ptr<dynamics::Skeleton>& skel,
+      Eigen::Vector4s overrideColor,
+      TimeSamplingPtr ts,
+      OArchive archive);
+
+  void createMeshAlembic(
+      const std::vector<Eigen::Vector3s>& vertices,
+      const std::vector<Eigen::Vector3s>& vertexNormals,
+      const std::vector<Eigen::Vector3i>& faces,
+      const std::vector<Eigen::Vector2s>& uv,
+      const std::string& meshPath,
+      const std::vector<std::string>& textures,
+      const std::vector<int>& textureStartIndices,
+      const Eigen::Vector3s& scale,
+      const Eigen::Vector4s& color,
+      bool castShadows,
+      bool receiveShadows,
+      std::string shapeName,
+      TimeSamplingPtr ts,
+      OArchive archive);
+
+  void updateMeshASSIMPAlembic(
+      const aiScene* mesh,
+      const std::string& meshPath,
+      const Eigen::Vector3s& pos,
+      const Eigen::Vector3s& euler,
+      const Eigen::Vector3s& scale,
+      const Eigen::Vector4s& color,
+      bool castShadows,
+      bool receiveShadows,
+      std::string shapeName);
+
+  void createMeshASSIMPAlembic(
+      const aiScene* mesh,
+      const std::string& meshPath,
+      const Eigen::Vector3s& scale,
+      const Eigen::Vector4s& color,
+      bool castShadows,
+      bool receiveShadows,
+      std::string shapeName,
+      TimeSamplingPtr ts,
+      OArchive archive);
+
+  void recordWorldAlembic(
+      const std::shared_ptr<simulation::World>& world,
+      // std::shared_ptr<simulation::World> originalWorld,
+      int32_t frame);
+
+  void recordSkeletonAlembic(
+      const std::shared_ptr<dynamics::Skeleton>& skel, int32_t frame);
+
+  int32_t renderAlembicCursor;
+  std::vector<std::vector<Eigen::Vector3s>> positions;
+  std::vector<std::vector<Eigen::Vector3s>> eulers;
+
+  std::unordered_map<std::string, Alembic::AbcGeom::OXform> nameToOXformMap;
+  std::unordered_map<std::string, XformSample> nameToOXformSample;
 
 protected:
   // protects the buffered JSON message (mJson) from getting
