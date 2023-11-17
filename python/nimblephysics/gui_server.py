@@ -6,17 +6,27 @@ import nimblephysics as nimble
 import random
 import typing
 import threading
-from typing import List
+from typing import Any, List
 import torch
 import numpy as np
 import math
 import pybullet as p
 import pybullet_data
 import time
+from scipy.spatial.transform import Rotation
 
 file_path = os.path.join(pathlib.Path(__file__).parent.absolute(), 'web_gui')
 
-
+class DeprecatedClass:
+  def __getattribute__(self, __name: str) -> Any:
+    def deprecated_func(*args, **kwargs):
+      print(f"WARNING: No need to call <{__name}> in bullet vis mode")
+    
+    if __name.startswith('__') and __name.endswith('__'):
+      return object.__getattribute__(self,__name)
+    else:
+      return deprecated_func
+    
 def createRequestHandler():
   """
   This creates a request handler that can serve the raw web GUI files, in
@@ -46,9 +56,9 @@ class NimbleGUI:
   def __init__(self, worldToCopy: nimble.simulation.World, useBullet=False, video_log_file=None):
     self.useBullet = useBullet
     if useBullet:
-      self.render_bullet_init(worldToCopy)
       self.log_id = None
       self.world = worldToCopy
+      self.render_bullet_init(worldToCopy)
       if video_log_file is not None:
         video_log_dir = os.path.dirname(video_log_file)
         os.makedirs(video_log_dir, exist_ok=True)
@@ -92,11 +102,15 @@ class NimbleGUI:
     self.world.setState(state.detach().numpy())
     self.guiServer.renderWorld(self.world)
 
-  def loopStates(self, states: List[torch.Tensor]):
+  def loopStates(self, states: List[torch.Tensor], indefinite: bool=False):
     if self.useBullet:
-      for state in states:
-        self.bullet_loopState(state)
-        time.sleep(0.1)
+      while True:
+        for state in states:
+          self.bullet_loopState(state)
+          time.sleep(0.1)
+        if not indefinite:
+          break
+      return
     self.looping = True
     self.statesToLoop = states
     dofs = self.world.getNumDofs()
@@ -117,9 +131,14 @@ class NimbleGUI:
     self.looping = False
 
   def nativeAPI(self) -> nimble.server.GUIWebsocketServer:
+    if self.useBullet:
+      print("No need to call this function for bullet")
+      return DeprecatedClass()
     return self.guiServer
 
   def blockWhileServing(self):
+    if self.useBullet:
+      return
     self.guiServer.blockWhileServing()
 
   def _onTick(self, now):
@@ -131,30 +150,9 @@ class NimbleGUI:
       else:
         self.i = 0
 
-  def test(self):
-    print("world dir:\n", dir(self.world))
-
-    print("skeleton dir:\n", dir(self.world.getSkeleton(0)))
-
-    for i in range(self.world.getNumSkeletons()):
-      skel = self.world.getSkeleton(i)
-      print("i = {}".format(i))
-      print(skel)
-      print("name = {}".format(skel.getName()))
-      # print("pos = {}".format(self.world.getPositions()))   # robot init state
-      print("pos = {}".format(skel.getPositions()))           # 似乎没有存name和pos和angle，可以在dart/utils/UniversalLoader.cpp那里存，然后再读取
-      print("pos1 = {}".format(skel.getBasePos()))
-      skel.setBasePos(np.array([-0.39, 0.075, 0.0]))
-      print("pos2 = {}".format(skel.getBasePos()))
-      print("angle1 = {}".format(skel.getEulerAngle()))
-      skel.setEulerAngle(np.array([0, 0, math.pi / 2]))
-      print("angle2 = {}".format(skel.getEulerAngle()))
-      print("urdf1 = {}".format(skel.getURDFPath()))
-      skel.setURDFPath("./urdf/pancake/pancake2.urdf")
-      print("urdf2 = {}".format(skel.getURDFPath()))
-
   def render_bullet_init(self, world):
-    self.physicsClient = p.connect(p.GUI)
+    self.p = p
+    self.gui_id = p.connect(p.GUI)
     p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
@@ -168,11 +166,18 @@ class NimbleGUI:
       skeleton = world.getSkeleton(i)
       urdf_path = skeleton.getURDFPath()
       pos = skeleton.getRootBodyNode().getTransform().translation()
-      rot = skeleton.getRootBodyNode().getTransform().rotation()
-      bullet_id = p.loadURDF(urdf_path, pos, rot)
-      self.skeleton_to_bullet_id[skeleton.getName()] = bullet_id
-      self.init_pos_rot[skeleton.getName()] = (pos, rot)
+      rot = Rotation.from_matrix(skeleton.getRootBodyNode().getTransform().rotation())
+      rot_quat = rot.as_quat()
 
+      # print("urdf_path = {}".format(urdf_path))
+      # print(type(pos), type(rot))
+      # print(pos, rot)
+      bullet_id = p.loadURDF(urdf_path, pos, rot_quat)
+      self.skeleton_to_bullet_id[skeleton.getName()] = bullet_id
+      self.init_pos_rot[skeleton.getName()] = (pos, rot.as_euler('xyz')) 
+    self.bullet_loopState(world.getState())             
+    self.bullet_auto_camera()
+    
   def bullet_loopState(self, state):
     tick = 0
     for skeleton_idx in range(self.world.getNumSkeletons()):
@@ -180,18 +185,40 @@ class NimbleGUI:
       dof = skeleton.getNumDofs()
       if dof == 0:
         continue
+      
       p_id = self.skeleton_to_bullet_id[skeleton.getName()]
       actions = state[tick: tick+dof]
+      
       joint_infos = [p.getJointInfo(p_id,i)[2] for i in range(p.getNumJoints(p_id))]
       non_fixed_joint_ids = [joint_id for joint_id, joint_info in enumerate(joint_infos) if joint_info != p.JOINT_FIXED]
       if len(non_fixed_joint_ids) == 0:
         init_pos, init_angle = self.init_pos_rot[skeleton.getName()]
-        p.resetBasePositionAndOrientation(p_id, np.array(actions[:3]) + init_pos,
-                                          p.getQuaternionFromEuler(init_angle + np.array(actions[3:])))
+        pos_change, angle_change = np.array(actions[3:]), np.array(actions[:3])
+        # print(f'{p_id}: name = {skeleton.getName()}, pos = {pos_change + init_pos}, angle = {init_angle + angle_change}')
+        p.resetBasePositionAndOrientation(p_id, pos_change + init_pos,
+                                          p.getQuaternionFromEuler(init_angle + angle_change))
       else:
         for i, joint_id in enumerate(non_fixed_joint_ids):
           p.resetJointState(p_id, joint_id, actions[i])
       tick += dof
+
+  def bullet_auto_camera(self):
+    inf = float('inf')
+    aabb_mins, aabb_maxs = [inf, inf, inf], [-inf, -inf, -inf]
+    for p_id in self.skeleton_to_bullet_id.values():
+      aabb = p.getAABB(p_id)
+      # print(aabb)
+      aabb_mins = [min(aabb_mins[i], aabb[0][i]) for i in range(3)]
+      aabb_maxs = [max(aabb_maxs[i], aabb[1][i]) for i in range(3)]
+    center = [(aabb_mins[i] + aabb_maxs[i]) / 2 for i in range(3)]
+    diagonal = sum([(aabb_maxs[i] - aabb_mins[i]) ** 2 for i in range(3)]) ** 0.5
+    camera_dist = diagonal * 2
+    camera_yaw, camera_pitch = 40, -20
+    # print("camera_dist = {}, camera_yaw = {}, camera_pitch = {}".format(camera_dist, camera_yaw, camera_pitch))
+    p.resetDebugVisualizerCamera(cameraDistance=camera_dist, 
+                                 cameraYaw=camera_yaw, 
+                                 cameraPitch=camera_pitch,
+                                 cameraTargetPosition=center)
 
   def _onConnect(self):
     self.ticker.start()
