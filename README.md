@@ -22,7 +22,7 @@ After that, you can launch GUI after loading URDFs in code by
 
 To visualize your states, simply call
 
-`	gui.loopStates(states)`
+`gui.loopStates(states)`
 
 You don't have to call other nimble GUI funcitons like `blockWhileServing` or `nativeAPI` but calling these will not cause any problem or having any actual effects.
 
