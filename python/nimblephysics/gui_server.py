@@ -53,15 +53,24 @@ def createRequestHandler():
 
 
 class NimbleGUI:
-  def __init__(self, worldToCopy: nimble.simulation.World, useBullet=False, video_log_file=None):
+  def __init__(self, worldToCopy: nimble.simulation.World, 
+               useBullet=False,
+               useSyntheticCamera=True,
+               saveCameraPath=None,
+               videoLogFile=None):
     self.useBullet = useBullet
     if useBullet:
       self.log_id = None
+      self.saveCameraPath = None
+      self.useSyntheticCamera = useSyntheticCamera
       self.render_bullet_init(worldToCopy)
-      if video_log_file is not None:
-        video_log_dir = os.path.dirname(video_log_file)
+      if videoLogFile is not None:
+        video_log_dir = os.path.dirname(videoLogFile)
         os.makedirs(video_log_dir, exist_ok=True)
-        p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, video_log_file)
+        self.log_id = p.startStateLogging(p.STATE_LOGGING_VIDEO_MP4, videoLogFile)
+      if saveCameraPath is not None:
+        self.saveCameraPath = os.path.abspath(saveCameraPath)
+        os.makedirs(self.saveCameraPath, exist_ok=True)
     else:
       self.world = worldToCopy.clone()
       self.guiServer = nimble.server.GUIWebsocketServer()
@@ -101,11 +110,13 @@ class NimbleGUI:
     self.world.setState(state.detach().numpy())
     self.guiServer.renderWorld(self.world)
 
-  def loopStates(self, states: List[torch.Tensor], indefinite: bool=False):
+  def loopStates(self, states: List[torch.Tensor],
+                 indefinite: bool=False,
+                 save_start_idx: int=0):
     if self.useBullet:
       while True:
-        for state in states:
-          self.bullet_loopState(state)
+        for i, state in enumerate(states):
+          self.bullet_loopState(state, i+save_start_idx)
           time.sleep(0.1)
         if not indefinite:
           break
@@ -172,17 +183,23 @@ class NimbleGUI:
   def render_bullet_init(self, world):
     self.p = p
     self.gui_id = p.connect(p.GUI)
-    p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+    if self.useSyntheticCamera:
+      p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 1)
+      p.configureDebugVisualizer(p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 1)
+      p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 1)
+    else:
+      p.configureDebugVisualizer(p.COV_ENABLE_GUI, 0)
+      
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
 
     p.setTimeStep(0.01)
     p.setGravity(0, 0, 0)
 
     self.bullet_reset(world)
-    self.bullet_loopState(world.getState())             
+    self.bullet_loopState(world.getState(), None)             
     self.bullet_auto_camera()
     
-  def bullet_loopState(self, state):
+  def bullet_loopState(self, state, save_idx):
     tick = 0
     for skeleton_idx in range(self.world.getNumSkeletons()):
       skeleton = self.world.getSkeleton(skeleton_idx)
@@ -205,6 +222,19 @@ class NimbleGUI:
         for i, joint_id in enumerate(non_fixed_joint_ids):
           p.resetJointState(p_id, joint_id, actions[i])
       tick += dof
+    
+    if self.useSyntheticCamera:
+      img = p.getCameraImage(640, 480, renderer=p.ER_BULLET_HARDWARE_OPENGL)
+      if (self.saveCameraPath is not None) and (save_idx is not None):
+        rgb = img[2]
+        depth = img[3]
+        segmentation = img[4]
+        rgb = np.reshape(rgb, (480, 640, 4))
+        depth = np.reshape(depth, (480, 640))
+        segmentation = np.reshape(segmentation, (480, 640))
+        np.save(os.path.join(self.saveCameraPath, f'rgb_{save_idx}.npy'), rgb)
+        np.save(os.path.join(self.saveCameraPath, f'depth_{save_idx}.npy'), depth)
+        np.save(os.path.join(self.saveCameraPath, f'segmentation_{save_idx}.npy'), segmentation)
 
   def bullet_auto_camera(self):
     inf = float('inf')
