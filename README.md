@@ -16,19 +16,33 @@ Nimble API has its own limited GUI. To use bullet-based GUI, you need to install
 
 `pip install pybullet`
 
-After that, you can launch GUI after loading URDFs in code by
+After that, you can launch GUI after loading URDFs in code, visualize the states of Jade simluation and close the GUI by the below code.
 
-`gui = nimble.NimbleGUI(world, useBullet=True)`
+```
+gui = nimble.NimbleGUI(world, useBullet=True)
+gui.loopStates(states)
+gui.stopServing()
+```
+If you want to use pybullet related functions you can use `gui.p` to access pybullet API, which is the same as `import pybullet as p` in normal setttings. For example, to change camera view, you can call. 
+```
+gui.p.resetDebugVisualizerCamera(dist, yaw, pitch, target_pos)
+```
 
-To visualize your states, simply call
+If you want to record the gui session, simply add the record path in the init argument as below
+```
+gui = nimble.NimbleGUI(world, useBUllet=True, video_log_file='path/to/mp4')
+gui.loopStates(states)
+gui.stopServing()
+```
 
-`gui.loopStates(states)`
+You can always open a new GUI after closing it, but if you just want to reset the gui, you can use the below function.
 
-You don't have to call other nimble GUI funcitons like `blockWhileServing` or `nativeAPI` but calling these will not cause any problem or having any actual effects.
+```
+gui.bullet_reset(world)
+```
 
-If you want to use pybullet related functions you can use `gui.p` to access pybullet API, which is the same as `import pybullet as p` in normal setttings. For example, to change camera view, you can call
+You don't have to call other nimble GUI funcitons like `blockWhileServing` or `nativeAPI` but calling these will not cause any problem or having any actual effects so it is easier for you to maintain multiple GUI settings.
 
-`gui.p.resetDebugVisualizerCamera(dist, yaw, pitch, target_pos)`
 
 ## Debug Mode:
 
