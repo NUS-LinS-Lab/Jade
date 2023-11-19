@@ -13,19 +13,7 @@ import math
 import pybullet as p
 import pybullet_data
 import time
-
-def rotation_matrix_to_euler_angles(R):
-    sy = math.sqrt(R[0, 0] * R[0, 0] +  R[1, 0] * R[1, 0])
-    singular = sy < 1e-6
-    if not singular:
-        x = math.atan2(R[2, 1], R[2, 2])
-        y = math.atan2(-R[2, 0], sy)
-        z = math.atan2(R[1, 0], R[0, 0])
-    else:
-        x = math.atan2(-R[1, 2], R[1, 1])
-        y = math.atan2(-R[2, 0], sy)
-        z = 0
-    return [x, y, z]
+from scipy.spatial.transform import Rotation
 
 file_path = os.path.join(pathlib.Path(__file__).parent.absolute(), 'web_gui')
 
@@ -33,12 +21,12 @@ class DeprecatedClass:
   def __getattribute__(self, __name: str) -> Any:
     def deprecated_func(*args, **kwargs):
       print(f"WARNING: No need to call <{__name}> in bullet vis mode")
-
+    
     if __name.startswith('__') and __name.endswith('__'):
       return object.__getattribute__(self,__name)
     else:
       return deprecated_func
-
+    
 def createRequestHandler():
   """
   This creates a request handler that can serve the raw web GUI files, in
@@ -69,7 +57,6 @@ class NimbleGUI:
     self.useBullet = useBullet
     if useBullet:
       self.log_id = None
-      self.world = worldToCopy
       self.render_bullet_init(worldToCopy)
       if video_log_file is not None:
         video_log_dir = os.path.dirname(video_log_file)
@@ -162,6 +149,26 @@ class NimbleGUI:
       else:
         self.i = 0
 
+  def bullet_reset(self, world):
+    p.resetSimulation()
+    self.world = world
+    self.skeleton_to_bullet_id = {}
+    self.init_pos_rot = {}
+
+    for i in range(world.getNumSkeletons()):
+      skeleton = world.getSkeleton(i)
+      urdf_path = skeleton.getURDFPath()
+      pos = skeleton.getRootBodyNode().getTransform().translation()
+      rot = Rotation.from_matrix(skeleton.getRootBodyNode().getTransform().rotation())
+      rot_quat = rot.as_quat()
+
+      # print("urdf_path = {}".format(urdf_path))
+      # print(type(pos), type(rot))
+      # print(pos, rot)
+      bullet_id = p.loadURDF(urdf_path, pos, rot_quat)
+      self.skeleton_to_bullet_id[skeleton.getName()] = bullet_id
+      self.init_pos_rot[skeleton.getName()] = (pos, rot.as_euler('xyz')) 
+
   def render_bullet_init(self, world):
     self.p = p
     self.gui_id = p.connect(p.GUI)
@@ -171,25 +178,10 @@ class NimbleGUI:
     p.setTimeStep(0.01)
     p.setGravity(0, 0, 0)
 
-    self.skeleton_to_bullet_id = {}
-    self.init_pos_rot = {}
-
-    for i in range(world.getNumSkeletons()):
-      skeleton = world.getSkeleton(i)
-      urdf_path = skeleton.getURDFPath()
-      pos = skeleton.getRootBodyNode().getTransform().translation()
-      rot_euler = rotation_matrix_to_euler_angles(skeleton.getRootBodyNode().getTransform().rotation())
-      rot_quat = p.getQuaternionFromEuler(rot_euler)
-
-      # print("urdf_path = {}".format(urdf_path))
-      # print(type(pos), type(rot))
-      # print(pos, rot)
-      bullet_id = p.loadURDF(urdf_path, pos, rot_quat)
-      self.skeleton_to_bullet_id[skeleton.getName()] = bullet_id
-      self.init_pos_rot[skeleton.getName()] = (pos, rot_euler)
-    self.bullet_loopState(world.getState())
+    self.bullet_reset(world)
+    self.bullet_loopState(world.getState())             
     self.bullet_auto_camera()
-
+    
   def bullet_loopState(self, state):
     tick = 0
     for skeleton_idx in range(self.world.getNumSkeletons()):
@@ -197,10 +189,10 @@ class NimbleGUI:
       dof = skeleton.getNumDofs()
       if dof == 0:
         continue
-
+      
       p_id = self.skeleton_to_bullet_id[skeleton.getName()]
       actions = state[tick: tick+dof]
-
+      
       joint_infos = [p.getJointInfo(p_id,i)[2] for i in range(p.getNumJoints(p_id))]
       non_fixed_joint_ids = [joint_id for joint_id, joint_info in enumerate(joint_infos) if joint_info != p.JOINT_FIXED]
       if len(non_fixed_joint_ids) == 0:
@@ -227,8 +219,8 @@ class NimbleGUI:
     camera_dist = diagonal * 2
     camera_yaw, camera_pitch = 40, -20
     # print("camera_dist = {}, camera_yaw = {}, camera_pitch = {}".format(camera_dist, camera_yaw, camera_pitch))
-    p.resetDebugVisualizerCamera(cameraDistance=camera_dist,
-                                 cameraYaw=camera_yaw,
+    p.resetDebugVisualizerCamera(cameraDistance=camera_dist, 
+                                 cameraYaw=camera_yaw, 
                                  cameraPitch=camera_pitch,
                                  cameraTargetPosition=center)
 
