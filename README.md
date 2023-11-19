@@ -30,9 +30,23 @@ gui.p.resetDebugVisualizerCamera(dist, yaw, pitch, target_pos)
 
 If you want to record the gui session, simply add the record path in the init argument as below
 ```
-gui = nimble.NimbleGUI(world, useBUllet=True, video_log_file='path/to/mp4')
+gui = nimble.NimbleGUI(world, useBUllet=True, videoLogFile='path/to.mp4')
 gui.loopStates(states)
 gui.stopServing()
+```
+
+If you want to save synthetic camera output in `{depth/rgb/segmentation}_{index}.npy`, pass the save folder path during init argument as below
+```
+gui = nimble.NimbleGUI(world, useBullet=True, saveCameraPath='path/to/save/foler')
+```
+If you need to loop several states and want to save the camera path together, you need to pass starting index when calling `loopStates`, otherwise it will by default start from `_0.npy`. For exmple, if you want to save the camera files starting with `_1000.npy`
+```
+gui.loopStates(states, save_start_idx=1000)
+```
+
+If you don't want to use the synthetic camera, disable it when init
+```
+gui = nimble.NimbleGUI(world, useBullet=True, useSyntheticCamera=False)
 ```
 
 You can always open a new GUI after closing it, but if you just want to reset the gui, you can use the below function.
