@@ -39,7 +39,7 @@ If you want to save synthetic camera output in `{depth/rgb/segmentation}_{index}
 ```
 gui = nimble.NimbleGUI(world, useBullet=True, saveCameraPath='path/to/save/foler')
 ```
-If you need to loop several states and want to save the camera path together, you need to pass starting index when calling `loopStates`, otherwise it will by default start from `_0.npy`. For exmple, if you want to save the camera files starting with `_1000.npy`
+If you need to do several loopStates and want to save the camera path together, you need to pass starting index when calling `loopStates`, otherwise it will by default start from `_0.npy`. For exmple, if you want to save the camera files starting with `_1000.npy`
 ```
 gui.loopStates(states, save_start_idx=1000)
 ```
