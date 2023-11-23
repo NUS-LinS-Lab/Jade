@@ -1038,6 +1038,11 @@ void BodyNode(py::module& m)
           },
           ::py::arg("arrayIndex"))
       .def(
+          "getDependentGenCoordIndices",
+          +[](const dart::dynamics::BodyNode* self) -> const std::vector<std::size_t>& {
+            return self->getDependentGenCoordIndices();
+          })
+      .def(
           "getNumDependentDofs",
           +[](const dart::dynamics::BodyNode* self) -> std::size_t {
             return self->getNumDependentDofs();
