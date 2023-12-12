@@ -13,7 +13,8 @@ import math
 import pybullet as p
 import pybullet_data
 import time
-from scipy.spatial.transform import Rotation
+# from scipy.spatial.transform import Rotation
+import pdb
 
 file_path = os.path.join(pathlib.Path(__file__).parent.absolute(), 'web_gui')
 
@@ -169,16 +170,25 @@ class NimbleGUI:
     for i in range(world.getNumSkeletons()):
       skeleton = world.getSkeleton(i)
       urdf_path = skeleton.getURDFPath()
-      pos = skeleton.getRootBodyNode().getTransform().translation()
-      rot = Rotation.from_matrix(skeleton.getRootBodyNode().getTransform().rotation())
-      rot_quat = rot.as_quat()
+      # pdb.set_trace()
+      # pos = skeleton.getRootBodyNode().getTransform().translation()
+      # pdb.set_trace()
+      # rot_quat = skeleton.getRootBodyNode().getTransform().quaternion().wxyz()
+      # rot = Rotation.from_quat(np.concatenate((rot_quat[1:], rot_quat[:1])))
+      # rot = _rot
+      # rot = Rotation.from_euler('zyx', _rot.as_euler('xyz'), degrees=False)
+      pos = skeleton.getBasePos()
+      rot = skeleton.getEulerAngle()
+      rot_quat = p.getQuaternionFromEuler(rot)
 
       # print("urdf_path = {}".format(urdf_path))
       # print(type(pos), type(rot))
-      # print(pos, rot)
+      # print(rot_mat)
+      # print(pos, rot, rot_quat)
       bullet_id = p.loadURDF(urdf_path, pos, rot_quat)
+      # p.resetBasePositionAndOrientation(bullet_id, pos, rot_quat)
       self.skeleton_to_bullet_id[skeleton.getName()] = bullet_id
-      self.init_pos_rot[skeleton.getName()] = (pos, rot.as_euler('xyz')) 
+      self.init_pos_rot[skeleton.getName()] = (pos, rot) 
 
   def render_bullet_init(self, world):
     self.p = p
@@ -209,6 +219,7 @@ class NimbleGUI:
       
       p_id = self.skeleton_to_bullet_id[skeleton.getName()]
       actions = state[tick: tick+dof]
+      # print(p_id, skeleton.getName(), actions)
       
       joint_infos = [p.getJointInfo(p_id,i)[2] for i in range(p.getNumJoints(p_id))]
       non_fixed_joint_ids = [joint_id for joint_id, joint_info in enumerate(joint_infos) if joint_info != p.JOINT_FIXED]
