@@ -30,7 +30,7 @@ gui.p.resetDebugVisualizerCamera(dist, yaw, pitch, target_pos)
 
 If you want to record the gui session, simply add the record path in the init argument as below
 ```
-gui = nimble.NimbleGUI(world, useBUllet=True, videoLogFile='path/to.mp4')
+gui = nimble.NimbleGUI(world, useBullet=True, videoLogFile='path/to.mp4')
 gui.loopStates(states)
 gui.stopServing()
 ```
@@ -55,8 +55,9 @@ You can always open a new GUI after closing it, but if you just want to reset th
 gui.bullet_reset(world)
 ```
 
-You don't have to call other nimble GUI funcitons like `blockWhileServing` or `nativeAPI` but calling these will not cause any problem or having any actual effects so it is easier for you to maintain multiple GUI settings.
+You don't have to call other nimble GUI funcitons like `blockWhileServing`(no effect) or `nativeAPI` but calling these will not cause any problem or having any actual effects so it is easier for you to maintain multiple GUI settings.
 
+Due to current limitaion, please refrain from manually changing your position and rotation when doing `world.loadSkeleton()`. If you met any problem regarding this, please raise an issue.
 
 ## Debug Mode:
 
