@@ -24,6 +24,7 @@
 #include "dart/server/external/base64/base64.h"
 #include "dart/simulation/World.hpp"
 
+using namespace Alembic::AbcGeom; // Contains Abc, AbcCoreAbstract
 namespace dart {
 namespace server {
 
@@ -164,6 +165,44 @@ std::string GUIStateMachine::flushJson()
   return json;
 }
 
+void GUIStateMachine::updateWorldAlembic(
+    const std::shared_ptr<simulation::World>& world, const std::string& prefix)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+  for (int i = 0; i < world->getNumSkeletons(); i++)
+  {
+    updateSkeletonAlembic(
+        world->getSkeletonRef(i), prefix, Eigen::Vector4s::Ones() * -1);
+  }
+}
+void GUIStateMachine::recordWorldAlembic(
+    const std::shared_ptr<simulation::World>& world, int32_t frame)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+  std::cout << "setting lock" << std::endl;
+  positions.push_back(std::vector<Eigen::Vector3s>());
+  eulers.push_back(std::vector<Eigen::Vector3s>());
+  for (int i = 0; i < world->getNumSkeletons(); i++)
+  {
+    recordSkeletonAlembic(world->getSkeletonRef(i), frame);
+  }
+}
+void GUIStateMachine::renderWorldAlembic(
+    const std::shared_ptr<simulation::World>& world,
+    string outputfile,
+    float fps)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+  // create an archive
+  renderAlembicCursor = 0;
+  OArchive archive(Alembic::AbcCoreOgawa::WriteArchive(), outputfile);
+  TimeSamplingPtr ts(new TimeSampling(1.0 / fps, 0.0));
+  for (int i = 0; i < world->getNumSkeletons(); i++)
+  {
+    renderSkeletonAlembic(
+        world->getSkeletonRef(i), Eigen::Vector4s::Ones() * -1, ts, archive);
+  }
+}
 /// This is a high-level command that creates/updates all the shapes in a
 /// world by calling the lower-level commands
 void GUIStateMachine::renderWorld(
@@ -251,6 +290,174 @@ void GUIStateMachine::renderBasis(
       layer);
 }
 
+void GUIStateMachine::updateSkeletonAlembic(
+    const std::shared_ptr<dynamics::Skeleton>& skel,
+    const std::string& prefix,
+    Eigen::Vector4s overrideColor)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+
+  bool useOriginalColor = overrideColor == -1 * Eigen::Vector4s::Ones();
+
+  for (int j = 0; j < skel->getNumBodyNodes(); j++)
+  {
+    dynamics::BodyNode* node = skel->getBodyNode(j);
+    if (node == nullptr)
+    {
+      std::cout << "ERROR! AlembicExporter found a null body node! This "
+                   "isn't supposed to be possible. Proceeding anyways."
+                << std::endl;
+      continue;
+    }
+
+    for (int k = 0; k < node->getNumShapeNodes(); k++)
+    {
+      dynamics::ShapeNode* shapeNode = node->getShapeNode(k);
+      dynamics::Shape* shape = shapeNode->getShape().get();
+
+      std::stringstream shapeNameStream;
+      shapeNameStream << prefix << "_";
+      shapeNameStream << skel->getName();
+      shapeNameStream << "_";
+      shapeNameStream << node->getName();
+      shapeNameStream << "_";
+      shapeNameStream << k;
+      std::string shapeName = shapeNameStream.str();
+
+      if (!shapeNode->hasVisualAspect())
+        continue;
+
+      dynamics::VisualAspect* visual = shapeNode->getVisualAspect(true);
+      if (visual == nullptr)
+        continue;
+
+      if (!visual->isHidden())
+      {
+        // Create the object from scratch
+        if (shape->getType() == "MeshShape")
+        {
+          dynamics::MeshShape* meshShape
+              = dynamic_cast<dynamics::MeshShape*>(shape);
+          updateMeshASSIMPAlembic(
+              meshShape->getMesh(),
+              meshShape->getMeshPath(),
+              shapeNode->getWorldTransform().translation(),
+              math::matrixToEulerXYZ(shapeNode->getWorldTransform().linear()),
+              meshShape->getScale(),
+              useOriginalColor ? visual->getRGBA() : overrideColor,
+              visual->getCastShadows(),
+              visual->getReceiveShadows(),
+              shapeName);
+        }
+      }
+    }
+  }
+}
+void GUIStateMachine::recordSkeletonAlembic(
+    const std::shared_ptr<dynamics::Skeleton>& skel, int32_t frame)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+  for (int j = 0; j < skel->getNumBodyNodes(); j++)
+  {
+    dynamics::BodyNode* node = skel->getBodyNode(j);
+    if (node == nullptr)
+    {
+      std::cout << "ERROR! AlembicExporter found a null body node! This "
+                   "isn't supposed to be possible. Proceeding anyways."
+                << std::endl;
+      continue;
+    }
+    for (int k = 0; k < node->getNumShapeNodes(); k++)
+    {
+      dynamics::ShapeNode* shapeNode = node->getShapeNode(k);
+      dynamics::Shape* shape = shapeNode->getShape().get();
+
+      if (!shapeNode->hasVisualAspect())
+        continue;
+
+      dynamics::VisualAspect* visual = shapeNode->getVisualAspect(true);
+      if (visual == nullptr)
+        continue;
+      if (!visual->isHidden())
+      {
+        // Create the object from scratch
+        if (shape->getType() == "MeshShape")
+        {
+          dynamics::MeshShape* meshShape
+              = dynamic_cast<dynamics::MeshShape*>(shape);
+          Eigen::Vector3s pos = shapeNode->getWorldTransform().translation();
+          Eigen::Vector3s euler
+              = math::matrixToEulerXYZ(shapeNode->getWorldTransform().linear());
+          positions[frame].push_back(pos);
+          eulers[frame].push_back(euler);
+        }
+      }
+    }
+  }
+}
+void GUIStateMachine::renderSkeletonAlembic(
+    const std::shared_ptr<dynamics::Skeleton>& skel,
+    Eigen::Vector4s overrideColor,
+    TimeSamplingPtr ts,
+    OArchive archive)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+
+  bool useOriginalColor = overrideColor == -1 * Eigen::Vector4s::Ones();
+
+  for (int j = 0; j < skel->getNumBodyNodes(); j++)
+  {
+    dynamics::BodyNode* node = skel->getBodyNode(j);
+    if (node == nullptr)
+    {
+      std::cout << "ERROR! AlembicExporter found a null body node! This "
+                   "isn't supposed to be possible. Proceeding anyways."
+                << std::endl;
+      continue;
+    }
+
+    for (int k = 0; k < node->getNumShapeNodes(); k++)
+    {
+      dynamics::ShapeNode* shapeNode = node->getShapeNode(k);
+      dynamics::Shape* shape = shapeNode->getShape().get();
+
+      std::stringstream shapeNameStream;
+      shapeNameStream << skel->getName();
+      shapeNameStream << "_";
+      shapeNameStream << node->getName();
+      shapeNameStream << "_";
+      shapeNameStream << k;
+      std::string shapeName = shapeNameStream.str();
+
+      if (!shapeNode->hasVisualAspect())
+        continue;
+
+      dynamics::VisualAspect* visual = shapeNode->getVisualAspect(true);
+      if (visual == nullptr)
+        continue;
+      // TODO: if this mesh is created
+      if (!visual->isHidden())
+      {
+        // Create the object from scratch
+        if (shape->getType() == "MeshShape")
+        {
+          dynamics::MeshShape* meshShape
+              = dynamic_cast<dynamics::MeshShape*>(shape);
+          createMeshASSIMPAlembic(
+              meshShape->getMesh(),
+              meshShape->getMeshPath(),
+              meshShape->getScale(), // scale
+              useOriginalColor ? visual->getRGBA() : overrideColor,
+              visual->getCastShadows(),
+              visual->getReceiveShadows(),
+              shapeName,
+              ts,
+              archive);
+        }
+      }
+    }
+  }
+}
 /// This is a high-level command that creates/updates all the shapes in a
 /// world by calling the lower-level commands
 void GUIStateMachine::renderSkeleton(
@@ -717,7 +924,184 @@ void GUIStateMachine::createLine(
     encodeCreateLine(json, mLines[key]);
   });
 }
+void GUIStateMachine::createMeshAlembic(
+    const std::vector<Eigen::Vector3s>& vertices,
+    const std::vector<Eigen::Vector3s>& vertexNormals,
+    const std::vector<Eigen::Vector3i>& faces,
+    const std::vector<Eigen::Vector2s>& uv,
+    const std::string& meshPath,
+    const std::vector<std::string>& textures,
+    const std::vector<int>& textureStartIndices,
+    const Eigen::Vector3s& scale,
+    const Eigen::Vector4s& color,
+    bool castShadows,
+    bool receiveShadows,
+    std::string shapeName,
+    TimeSamplingPtr ts,
+    OArchive archive)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+  // setup framework of properties
+  // setup OXform
+  OXform xfobj(archive.getTop(), shapeName, ts);
+  // nameToOXformMap.emplace(shapeName, OXform(archive.getTop(), shapeName,
+  // ts)); OXform& xfobj = nameToOXformMap[shapeName];
 
+  OPolyMesh meshyObj(xfobj, "mesh_" + shapeName);
+  OPolyMeshSchema& mesh = meshyObj.getSchema();
+  // Vertices
+  std::vector<V3f> verts(vertices.size());
+  for (size_t i = 0; i < vertices.size(); ++i)
+  {
+    verts[i] = V3f(vertices[i][0], vertices[i][1], vertices[i][2]);
+    std::cout << "Verts " << i << ":" << verts[i] << std::endl;
+  }
+  // faces
+  int32_t faceNum = faces.size();
+  int32_t* unfoldedFaces = new int32_t[3 * faceNum];
+  for (int32_t i = 0; i < faceNum; i++)
+  {
+    unfoldedFaces[i * 3] = faces[i][0];
+    unfoldedFaces[i * 3 + 1] = faces[i][1];
+    unfoldedFaces[i * 3 + 2] = faces[i][2];
+  }
+  std::cout << "unfoldedFaces:" << std::endl;
+  for (int32_t i = 0; i < 3 * faceNum; i++)
+  {
+    std::cout << unfoldedFaces[i] << ' ' << std::endl;
+  }
+  // g_counts
+  Abc::int32_t* g_counts = new Abc::int32_t[faceNum];
+  for (int32_t i = 0; i < faceNum; i++)
+  {
+    g_counts[i] = 3;
+  }
+  // g_uvs
+  int32_t uv_size = uv.size();
+  std::cout << "UV_size:" << uv_size << std::endl;
+  float32_t* g_uvs = new float32_t[uv_size * 2];
+  for (int32_t i = 0; i < uv_size; i++)
+  {
+    g_uvs[i * 2] = uv[i][0];
+    g_uvs[i * 2 + 1] = uv[i][1];
+  }
+  std::cout << "g_uvs:" << std::endl;
+  for (int32_t i = 0; i < uv_size * 2; i++)
+  {
+    std::cout << g_uvs[i] << std::endl;
+  }
+  // create Meshschema sample
+  OPolyMeshSchema::Sample mesh_samp(
+      V3fArraySample(verts),
+      Int32ArraySample(unfoldedFaces, 3 * faceNum),
+      Int32ArraySample(g_counts, faceNum));
+  // create uvSample
+  OV2fGeomParam::Sample uvsamp(
+      V2fArraySample((const V2f*)g_uvs, uv_size), kFacevaryingScope);
+  std::cout << "UVSample set" << std::endl;
+  mesh_samp.setUVs(uvsamp);
+  mesh.set(mesh_samp);
+  std::cout << "MeshSchema Sample Set" << std::endl;
+
+  // Set up Color
+  OC3fGeomParam m_vtx_cols_prop = OC3fGeomParam(
+      mesh.getArbGeomParams(), "vertexColors", false, kVertexScope, 1);
+  std::vector<C3f> vtx_cols;
+  std::cout << "Colors:" << color[0] << color[1] << color[2] << std::endl;
+  for (int32_t i = 0; i < vertices.size(); i++)
+  {
+    vtx_cols.push_back(C3f(color[0], color[1], color[2]));
+  }
+
+  // Set up Texture
+  for (int32_t textureIndex = 0; textureIndex < textureStartIndices.size();
+       textureIndex++)
+  {
+    int32_t endIndex;
+    if (textureIndex == textureStartIndices.size() - 1)
+    {
+      endIndex = vertices.size();
+    }
+    else
+    {
+      endIndex = textureStartIndices[textureIndex + 1];
+    }
+    string ab_path = meshPath.substr(0, meshPath.find_last_of('/')) + '/'
+                     + textures[textureIndex];
+    std::cout << "Texture path:" << ab_path << std::endl;
+    cv::Mat textureImage = cv::imread(ab_path);
+    for (int32_t vert = textureStartIndices[textureIndex]; vert < endIndex;
+         vert++)
+    {
+      // calculate color
+      float u = uv[vert][0] * (textureImage.cols - 1);
+      float v = uv[vert][1] * (textureImage.rows - 1);
+      int u0 = static_cast<int>(u);
+      int v0 = static_cast<int>(v);
+      int u1 = std::min(u0 + 1, textureImage.cols - 1);
+      int v1 = std::min(v0 + 1, textureImage.rows - 1);
+      float du = u - u0;
+      float dv = v - v0;
+
+      cv::Vec3b texColor00 = textureImage.at<cv::Vec3b>(v0, u0);
+      cv::Vec3b texColor01 = textureImage.at<cv::Vec3b>(v0, u1);
+      cv::Vec3b texColor10 = textureImage.at<cv::Vec3b>(v1, u0);
+      cv::Vec3b texColor11 = textureImage.at<cv::Vec3b>(v1, u1);
+
+      cv::Vec3b color = texColor00 * (1.0f - du) * (1.0f - dv)
+                        + texColor01 * du * (1.0f - dv)
+                        + texColor10 * (1.0f - du) * dv + texColor11 * du * dv;
+      vtx_cols[vert]
+          = C3f(color[2] / 255.0f, color[1] / 255.0f, color[0] / 255.0f);
+    }
+  }
+  OC3fGeomParam::Sample vtx_cols_sample(C3fArraySample(vtx_cols), kVertexScope);
+  m_vtx_cols_prop.set(vtx_cols_sample);
+
+  std::cout << "Textures:" << std::endl;
+  for (int32_t i = 0; i < textures.size(); i++)
+  {
+    std::cout << textures[i] << ' ';
+  }
+  std::cout << std::endl;
+  std::cout << "textureStartIndices:" << std::endl;
+  for (int32_t i = 0; i < textureStartIndices.size(); i++)
+  {
+    std::cout << textureStartIndices[i] << ' ';
+  }
+  std::cout << std::endl;
+
+  // OC3fGeomParam texture_prop = OC3fGeomParam(mesh.getArbGeomParams(),
+  // "textureColors", false, kVertexScope, 1); std::vector<C3f> texture_cols;
+  // for(int32_t i = 0; i < vertices.size(); i++)
+  // {
+  //   // calculate the color
+  //   cv::Mat textureImage = cv::imread("path/to/your/texture/image.jpg");
+
+  // }
+
+  // Set up XformSample
+  XformSample xf_samp;
+  for (int32_t frame = 0; frame < positions.size(); frame++)
+  {
+    Eigen::Vector3s position = positions[frame][renderAlembicCursor];
+    Eigen::Vector3s euler = eulers[frame][renderAlembicCursor];
+    XformOp transop(kTranslateOperation, kTranslateHint);
+    XformOp scaleop(kScaleOperation, kScaleHint);
+    xf_samp.addOp(transop, V3d(position[0], position[1], position[2]));
+    xf_samp.addOp(scaleop, V3d(scale[0],scale[1],scale[2]));
+    double rotx = euler[0] * 180.0 / M_PI;
+    double roty = euler[1] * 180.0 / M_PI;
+    double rotz = euler[2] * 180.0 / M_PI;
+    xf_samp.addOp(XformOp(kRotateXOperation), rotx);
+    xf_samp.addOp(XformOp(kRotateYOperation), roty);
+    xf_samp.addOp(XformOp(kRotateZOperation), rotz);
+    xfobj.getSchema().set(xf_samp);
+  }
+
+  std::cout << "XForm set" << std::endl;
+  renderAlembicCursor += 1;
+}
 /// This creates a mesh in the web GUI under a specified key, using raw shape
 /// data
 void GUIStateMachine::createMesh(
@@ -759,6 +1143,128 @@ void GUIStateMachine::createMesh(
   });
 }
 
+void GUIStateMachine::updateMeshASSIMPAlembic(
+    const aiScene* mesh,
+    const std::string& meshPath,
+    const Eigen::Vector3s& pos,
+    const Eigen::Vector3s& euler,
+    const Eigen::Vector3s& scale,
+    const Eigen::Vector4s& color,
+    bool castShadows,
+    bool receiveShadows,
+    std::string shapeName)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+  // update the OXform
+  OXform foundOXform = nameToOXformMap.at(shapeName);
+  XformSample foundXFormSample = nameToOXformSample.at(shapeName);
+  foundXFormSample.reset();
+  // add updated OXForm
+  XformOp transop(kTranslateOperation, kTranslateHint);
+  XformOp scaleop(kScaleOperation, kScaleHint);
+  foundXFormSample.addOp(transop, V3d(pos[0], pos[1], pos[2]));
+  double rotx = euler[0] * 180.0 / M_PI;
+  double roty = euler[1] * 180.0 / M_PI;
+  double rotz = euler[2] * 180.0 / M_PI;
+  foundXFormSample.addOp(XformOp(kRotateXOperation), rotx);
+  foundXFormSample.addOp(XformOp(kRotateYOperation), roty);
+  foundXFormSample.addOp(XformOp(kRotateZOperation), rotz);
+  foundXFormSample.addOp(scaleop, V3d(scale[0], scale[1], scale[2]));
+  foundOXform.getSchema().set(foundXFormSample);
+}
+void GUIStateMachine::createMeshASSIMPAlembic(
+    const aiScene* mesh,
+    const std::string& meshPath,
+    const Eigen::Vector3s& scale,
+    const Eigen::Vector4s& color,
+    bool castShadows,
+    bool receiveShadows,
+    std::string shapeName,
+    TimeSamplingPtr ts,
+    OArchive archive)
+{
+  const std::lock_guard<std::recursive_mutex> lock(this->globalMutex);
+  // std::cout<< "Mesh Path:" << meshPath << std::endl;
+  std::vector<Eigen::Vector3s> vertices;
+  std::vector<Eigen::Vector3s> vertexNormals;
+  std::vector<Eigen::Vector3i> faces;
+  std::vector<Eigen::Vector2s> uv;
+  std::vector<std::string> textures;
+  std::vector<int> textureStartIndices;
+
+  std::string currentTexturePath = "";
+
+  for (int i = 0; i < mesh->mNumMeshes; i++)
+  {
+    aiMesh* m = mesh->mMeshes[i];
+    aiMaterial* mtl = nullptr;
+    if (mesh->mMaterials != nullptr)
+    {
+      mtl = mesh->mMaterials[m->mMaterialIndex];
+    }
+    aiString path;
+    if (mtl != nullptr
+        && aiReturn_SUCCESS
+               == aiGetMaterialTexture(mtl, aiTextureType_DIFFUSE, 0, &path))
+    {
+      std::string newTexturePath = std::string(path.C_Str());
+      if (newTexturePath != currentTexturePath)
+      {
+        currentTexturePath = newTexturePath;
+        textures.push_back(newTexturePath);
+        textureStartIndices.push_back(vertices.size());
+        // if (mTextures.find(newTexturePath) == mTextures.end())
+        // {
+        //   boost::filesystem::path fullPath = boost::filesystem::canonical(
+        //       boost::filesystem::path(currentTexturePath),
+        //       boost::filesystem::path(
+        //           meshPath.substr(0, meshPath.find_last_of("/"))));
+
+        //   createTextureFromFile(newTexturePath,
+        //   std::string(fullPath.c_str()));
+        // }
+      }
+    }
+
+    for (int j = 0; j < m->mNumVertices; j++)
+    {
+      vertices.emplace_back(
+          m->mVertices[j][0], m->mVertices[j][1], m->mVertices[j][2]);
+      if (m->mNormals != nullptr)
+      {
+        vertexNormals.emplace_back(
+            m->mNormals[j][0], m->mNormals[j][1], m->mNormals[j][2]);
+      }
+      if (m->mNumUVComponents[0] >= 2)
+      {
+        uv.emplace_back(m->mTextureCoords[0][j][0], m->mTextureCoords[0][j][1]);
+      }
+    }
+    for (int k = 0; k < m->mNumFaces; k++)
+    {
+      assert(m->mFaces[k].mNumIndices == 3);
+      faces.emplace_back(
+          m->mFaces[k].mIndices[0],
+          m->mFaces[k].mIndices[1],
+          m->mFaces[k].mIndices[2]);
+    }
+  }
+  createMeshAlembic(
+      vertices,
+      vertexNormals,
+      faces,
+      uv,
+      meshPath,
+      textures,
+      textureStartIndices,
+      scale,
+      color,
+      castShadows,
+      receiveShadows,
+      shapeName,
+      ts,
+      archive);
+}
 /// This creates a mesh in the web GUI under a specified key, from the ASSIMP
 /// mesh
 void GUIStateMachine::createMeshASSIMP(
@@ -783,7 +1289,7 @@ void GUIStateMachine::createMeshASSIMP(
   std::vector<int> textureStartIndices;
 
   std::string currentTexturePath = "";
-
+  
   // printf("num meshes: %d \n", mesh->mNumMeshes);
 
   int verticeNum = 0;
@@ -819,11 +1325,8 @@ void GUIStateMachine::createMeshASSIMP(
       }
     }
 
-    // printf("mtl path: %s \n", currentTexturePath.c_str());
-
     for (int j = 0; j < m->mNumVertices; j++)
     {
-      // printf("vertex %d: %f %f %f \n", j, m->mVertices[j][0], m->mVertices[j][1], m->mVertices[j][2]);
       vertices.emplace_back(
           m->mVertices[j][0], m->mVertices[j][1], m->mVertices[j][2]);
       if (m->mNormals != nullptr)
@@ -841,16 +1344,14 @@ void GUIStateMachine::createMeshASSIMP(
       }
       */
     }
-    //  printf("num faces: %d \n", m->mNumFaces);
     for (int k = 0; k < m->mNumFaces; k++)
     {
       assert(m->mFaces[k].mNumIndices == 3);
       faces.emplace_back(
-          m->mFaces[k].mIndices[0] + verticeNum,
-          m->mFaces[k].mIndices[1] + verticeNum,
-          m->mFaces[k].mIndices[2] + verticeNum);
+          m->mFaces[k].mIndices[0],
+          m->mFaces[k].mIndices[1],
+          m->mFaces[k].mIndices[2]);
     }
-    verticeNum += m->mNumVertices;
   }
 
   createMesh(

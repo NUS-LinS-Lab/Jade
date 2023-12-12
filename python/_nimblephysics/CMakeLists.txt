@@ -69,6 +69,9 @@ target_include_directories(_nimblephysics
     ${pybind11_INCLUDE_DIRS}
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    /usr/local/include/Imath
+    /usr/local/include/Alembic
+    /usr/local/include/opencv4
 )
 
 target_link_libraries(_nimblephysics

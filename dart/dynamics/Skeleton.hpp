@@ -76,6 +76,12 @@ class Skeleton : public virtual common::VersionCounter,
                  public detail::SkeletonAspectBase
 {
 public:
+  std::string urdf_path;
+
+  Eigen::Vector3s base_pos;
+
+  Eigen::Vector3s euler_angle;
+  
   static Eigen::Matrix<s_t, Eigen::Dynamic, Eigen::Dynamic> EMPTY;
 
   // Some of non-virtual functions of MetaSkeleton are hidden because of the
@@ -163,6 +169,18 @@ public:
 
   /// Create a new Skeleton inside of a shared_ptr
   static SkeletonPtr create(const AspectPropertiesData& properties);
+
+  Eigen::Vector3s getBasePos();
+
+  Eigen::Vector3s getEulerAngle();
+
+  std::string getURDFPath();
+
+  void setBasePos(Eigen::Vector3s pos);
+
+  void setEulerAngle(Eigen::Vector3s angle);
+
+  void setURDFPath(std::string string);
 
   /// Get the shared_ptr that manages this Skeleton
   SkeletonPtr getPtr();
@@ -2176,6 +2194,7 @@ protected:
   void addEntryToSoftBodyNodeNameMgr(SoftBodyNode* _newNode);
 
 protected:
+
   /// The resource-managing pointer to this Skeleton
   std::weak_ptr<Skeleton> mPtr;
 

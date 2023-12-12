@@ -404,6 +404,30 @@ SkeletonPtr Skeleton::create(const AspectPropertiesData& properties)
   return skel;
 }
 
+Eigen::Vector3s Skeleton::getBasePos() {
+  return base_pos;
+}
+
+Eigen::Vector3s Skeleton::getEulerAngle() {
+  return euler_angle;
+}
+
+std::string Skeleton::getURDFPath() {
+  return urdf_path;
+}
+
+void Skeleton::setBasePos(Eigen::Vector3s pos) {
+  base_pos = pos;
+}
+
+void Skeleton::setEulerAngle(Eigen::Vector3s angle) {
+  euler_angle = angle;
+}
+
+void Skeleton::setURDFPath(std::string path) {
+  urdf_path = path;
+}
+
 //==============================================================================
 SkeletonPtr Skeleton::getPtr()
 {

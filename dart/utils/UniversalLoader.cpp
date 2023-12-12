@@ -98,6 +98,10 @@ std::shared_ptr<dynamics::Skeleton> loadSkeleton(
 
   // Update all the root joints with the new specified transform
 
+  skel->setBasePos(basePosition);
+  skel->setEulerAngle(baseEulerAnglesXYZ);
+  skel->setURDFPath(path);
+
   Eigen::Isometry3s baseTransform = Eigen::Isometry3s::Identity();
   baseTransform.translation() = basePosition;
   baseTransform.linear() = math::eulerXYZToMatrix(baseEulerAnglesXYZ);

@@ -80,7 +80,7 @@ class CMakeBuild(build_ext):
         print('Using PYTHON_LIBRARY='+PYTHON_LIBRARY)
         cmake_args += ['-DPYTHON_INCLUDE_DIR:PATH='+PYTHON_INCLUDE_DIR]
         cmake_args += ['-DPYTHON_LIBRARY:FILEPATH='+PYTHON_LIBRARY]
-      build_args += ['--', '-j12']
+      build_args += ['--', '-j1']
 
     env = os.environ.copy()
     env['CXXFLAGS'] = '{} -DVERSION_INFO=\\"{}\\"'.format(env.get('CXXFLAGS', ''),

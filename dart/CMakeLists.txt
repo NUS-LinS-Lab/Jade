@@ -156,6 +156,21 @@ else()
   target_compile_features(dart PUBLIC cxx_std_14)
 endif()
 
+# Add Alembic
+find_package(Alembic REQUIRED PATHS "/usr/local/include/Alembic")
+include_directories("/usr/local/include/Alembic")
+include_directories("/usr/local/include/Imath")
+target_include_directories(dart PRIVATE /usr/local/include/Imath)
+target_link_libraries(dart PRIVATE Alembic::Alembic)
+
+# Add Opencv
+find_package(OpenCV REQUIRED COMPONENTS core imgcodecs)
+include_directories( ${OpenCV_INCLUDE_DIRS} )
+target_link_libraries( dart PRIVATE ${OpenCV_LIBS} )
+# include_directories("/usr/local/include/opencv4")
+# target_include_directories(dart PRIVATE /usr/local/include/opencv4)
+# target_link_libraries(dart PRIVATE )
+
 # Enable pthreads
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
