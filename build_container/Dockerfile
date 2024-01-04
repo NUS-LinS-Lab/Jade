@@ -86,6 +86,7 @@ RUN git clone https://github.com/coin-or/Ipopt.git && \
 # Install tinyxml2
 RUN git clone https://github.com/leethomason/tinyxml2.git && \
     pushd tinyxml2 && \
+    git checkout 9.0.0 && \
     git checkout bf15233ad88390461f6ab0dbcf046cce643c5fcb &&\
     mkdir build && \
     pushd build && \
@@ -132,6 +133,7 @@ RUN git clone https://github.com/ros/console_bridge.git && \
 # Install urdfdom
 RUN git clone https://github.com/ros/urdfdom.git && \
     pushd urdfdom && \
+    git checkout 3.1.1 && \
     mkdir build && \
     pushd build && \
     cmake .. -DCMAKE_POSITION_INDEPENDENT_CODE=ON && \
@@ -244,11 +246,12 @@ ENV PYTHON_VERSION_NUMBER="3.8"
 
 # Install pybind11
 ENV CPATH="${PYTHON_INCLUDE}"
-RUN git clone https://github.com/pybind/pybind11.git && \
-    pushd pybind11 && \
+RUN git clone https://github.com/pybind/pybind11.git
+RUN pushd pybind11 && \
     mkdir build && \
     pushd build && \
-    cmake .. && \
+    cmake .. \
+    -DPython_INCLUDE_DIR=$(python -c "import sysconfig; print(sysconfig.get_path('include'))") && \
     make install -j10
 # Install pytest
 RUN ${PYTHON} -m pip install pytest
@@ -268,7 +271,8 @@ ARG group=adamas
 ARG home=/home/${user}
 RUN mkdir -p /etc/sudoers.d \
     && groupadd -g ${gid} ${group} \
-    && useradd -d ${home} -u ${uid} -g ${gid} -m -s /bin/bash ${user}
+    && useradd -d ${home} -u ${uid} -g ${gid} -m -s /bin/bash ${user} \
+    && echo "${user} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/sudoers_${user}
 USER ${user}
 WORKDIR ${home}
 ENV HOME ${home}
