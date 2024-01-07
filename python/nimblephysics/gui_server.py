@@ -14,7 +14,7 @@ import pybullet as p
 import pybullet_data
 import time
 # from scipy.spatial.transform import Rotation
-import pdb
+# import pdb
 
 file_path = os.path.join(pathlib.Path(__file__).parent.absolute(), 'web_gui')
 
@@ -166,30 +166,54 @@ class NimbleGUI:
     self.world = world
     self.skeleton_to_bullet_id = {}
     self.init_pos_rot = {}
+    self.joint_to_state = []
 
     for i in range(world.getNumSkeletons()):
       skeleton = world.getSkeleton(i)
       urdf_path = skeleton.getURDFPath()
-      # pdb.set_trace()
-      # pos = skeleton.getRootBodyNode().getTransform().translation()
-      # pdb.set_trace()
-      # rot_quat = skeleton.getRootBodyNode().getTransform().quaternion().wxyz()
-      # rot = Rotation.from_quat(np.concatenate((rot_quat[1:], rot_quat[:1])))
-      # rot = _rot
-      # rot = Rotation.from_euler('zyx', _rot.as_euler('xyz'), degrees=False)
       pos = skeleton.getBasePos()
       rot = skeleton.getEulerAngle()
       rot_quat = p.getQuaternionFromEuler(rot)
 
-      # print("urdf_path = {}".format(urdf_path))
-      # print(type(pos), type(rot))
-      # print(rot_mat)
-      # print(pos, rot, rot_quat)
       bullet_id = p.loadURDF(urdf_path, pos, rot_quat)
-      # p.resetBasePositionAndOrientation(bullet_id, pos, rot_quat)
       self.skeleton_to_bullet_id[skeleton.getName()] = bullet_id
+      
+      # print('init pos rot',pos, rot)
+      # pos = skeleton.getRootBodyNode().getTransform().translation()
+      # rot = Rotation.from_matrix(skeleton.getRootBodyNode().getTransform().rotation())
+      # rot = rot.as_euler('xyz', degrees=False)
+      # print('init pos rot',pos, rot)
       self.init_pos_rot[skeleton.getName()] = (pos, rot) 
-
+      
+      # [isFreeJoint, staTick, dof, bullet_joint_idx, nimble_joint_idx (not used)] 
+      self.joint_to_state.append([])
+      skeleton_joints = [skeleton.getJoint(i) for i in range(skeleton.getNumJoints())]
+      bullet_joint_name_idx = {p.getJointInfo(bullet_id, i)[1].decode('utf-8'): i for i in range(p.getNumJoints(bullet_id))}
+      tick = 0
+      for i, joint in enumerate(skeleton_joints):
+        joint_type = joint.getType()
+        # Nothing to do for fixed joints
+        if joint_type == 'WeldJoint':
+          continue
+        
+        dof = joint.NumDofs
+        name = joint.getName()
+        # Most likely world to base joint
+        if joint_type == 'FreeJoint':
+          if name in bullet_joint_name_idx:
+            print(f'FreeJoint {name} is found in bullet, treated as object to world joint')
+          isFreeJoint = True
+          bullet_joint_idx = None
+          
+        # Other joints
+        else:
+          assert name in bullet_joint_name_idx, f'{name} is not found in bullet, check urdf'
+          isFreeJoint = False
+          bullet_joint_idx = bullet_joint_name_idx[name]
+          
+        self.joint_to_state[-1].append([isFreeJoint, tick, dof, bullet_joint_idx, i])
+        tick += dof
+      
   def render_bullet_init(self, world):
     self.p = p
     self.gui_id = p.connect(p.GUI)
@@ -206,32 +230,39 @@ class NimbleGUI:
     p.setGravity(0, 0, 0)
 
     self.bullet_reset(world)
-    self.bullet_loopState(world.getState(), None)             
+    self.bullet_loopState(world.getState(), None)
     self.bullet_auto_camera()
     
   def bullet_loopState(self, state, save_idx):
     tick = 0
     for skeleton_idx in range(self.world.getNumSkeletons()):
+      # print(f'Skeleton {skeleton_idx}')
       skeleton = self.world.getSkeleton(skeleton_idx)
       dof = skeleton.getNumDofs()
       if dof == 0:
         continue
-      
+
       p_id = self.skeleton_to_bullet_id[skeleton.getName()]
       actions = state[tick: tick+dof]
-      # print(p_id, skeleton.getName(), actions)
-      
-      joint_infos = [p.getJointInfo(p_id,i)[2] for i in range(p.getNumJoints(p_id))]
-      non_fixed_joint_ids = [joint_id for joint_id, joint_info in enumerate(joint_infos) if joint_info != p.JOINT_FIXED]
-      if len(non_fixed_joint_ids) == 0:
-        init_pos, init_angle = self.init_pos_rot[skeleton.getName()]
-        pos_change, angle_change = np.array(actions[3:]), np.array(actions[:3])
-        # print(f'{p_id}: name = {skeleton.getName()}, pos = {pos_change + init_pos}, angle = {init_angle + angle_change}')
-        p.resetBasePositionAndOrientation(p_id, pos_change + init_pos,
-                                          p.getQuaternionFromEuler(init_angle + angle_change))
-      else:
-        for i, joint_id in enumerate(non_fixed_joint_ids):
-          p.resetJointState(p_id, joint_id, actions[i])
+      for joint_info in self.joint_to_state[skeleton_idx]:
+        isFreeJoint, staTick, joint_dof, bullet_joint_idx, nimble_joint_idx = joint_info
+        if isFreeJoint:
+          action = actions[staTick: staTick+joint_dof]
+          init_pos, init_angle = self.init_pos_rot[skeleton.getName()]
+          pos_change, angle_change = np.array(action[3:]), np.array(action[:3])
+          # print(f'{p_id}: name = {skeleton.getName()}, pos = {pos_change} + {init_pos}, angle = {init_angle} + {angle_change}')
+          # print(state, tick, dof, staTick, joint_dof, actions, action)
+          p.resetBasePositionAndOrientation(p_id, pos_change + init_pos,
+                                            p.getQuaternionFromEuler(init_angle + angle_change))
+          continue
+        
+        if joint_dof == 1:
+          p.resetJointState(p_id, bullet_joint_idx, actions[staTick])
+          # print(f'{p_id}: name = {skeleton.getName()}, joint = {p.getJointInfo(p_id, bullet_joint_idx)[1].decode("utf-8")}, action = {actions[staTick]}')
+        else:
+          p.resetJointStateMultiDof(p_id, bullet_joint_idx, actions[staTick: staTick+joint_dof])
+          # print(f'{p_id}: name = {skeleton.getName()}, joint = {p.getJointInfo(p_id, bullet_joint_idx)[1].decode("utf-8")}, action = {actions[staTick: staTick+dof]}')
+          
       tick += dof
     
     if self.useSyntheticCamera:
