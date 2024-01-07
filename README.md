@@ -23,7 +23,20 @@ gui = nimble.NimbleGUI(world, useBullet=True)
 gui.loopStates(states)
 gui.stopServing()
 ```
-If you want to use pybullet related functions you can use `gui.p` to access pybullet API, which is the same as `import pybullet as p` in normal setttings. For example, to change camera view, you can call. 
+
+A `state` is combination of all joints of all skeletons in Jade. In `loopStates`, `states` refers to a collection of `state`, if you just want a single state, you can do a workaround by doing `states = [state]`. To debug and understand more about the state, you can do the below. Note that if you don't define a world-base joint in your urdf, Nimble will automatically add a 6D free joint `rootJoint` as your `state[:6]` 
+```
+for i in range(world.getNumSkeletons()):
+  skel = world.getSkeleton(i)
+  joints = [[skel.getJoint(i) for i in range(skel.getNumJoints())]]
+  for joint in joints:
+    name, type = joint.getName(), joint.getType()
+    if type != 'WeldJoint':           # Fixed joint
+      dof = joint.NumDofs
+      joint_value = joint.getPosistions()
+```
+
+If you want to use pybullet related functions you can use `gui.p` to access pybullet API, which is the same as `import pybullet as p` in normal setttings. For example, to change camera view, you can call. Note that instead of camera extrinsics, PyBullet uses the below form, where `target_pos` is the center point to area of interest, and the other three parameters describe relative information from camera to the point.
 ```
 gui.p.resetDebugVisualizerCamera(dist, yaw, pitch, target_pos)
 ```
