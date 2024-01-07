@@ -56,7 +56,7 @@ def render(path):
 		pancake_node = pancake.getBodyNode(i)
 		pancake_node.setFrictionCoeff(1.)
 
-	gui = nimble.NimbleGUI(world)
+	gui = nimble.NimbleGUI(world, useBullet=True)
 	gui.serve(8090)
 	gui.nativeAPI().renderWorld(world)
 
@@ -70,4 +70,4 @@ def render(path):
 
 if __name__ == "__main__":
 
-	render('./data/pancake_lift_nimble.pt')
+	render('./data/pancake_lift_jade.pt')

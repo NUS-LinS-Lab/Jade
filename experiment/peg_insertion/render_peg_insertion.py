@@ -45,7 +45,7 @@ def render(path):
 		hole_node = hole.getBodyNode(i)
 		hole_node.setFrictionCoeff(0)
 
-	gui = nimble.NimbleGUI(world)
+	gui = nimble.NimbleGUI(world, useBullet=True)
 	gui.serve(8080)
 	gui.nativeAPI().renderWorld(world)
 
@@ -61,4 +61,4 @@ if __name__ == "__main__":
 
 	
 
-	render("peg_insertion_nimble.pt")
+	render("data/peg_insertion_jade.pt")
