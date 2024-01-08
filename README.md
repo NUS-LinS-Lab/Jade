@@ -1,8 +1,9 @@
 # Jade
 
 ## Build and install Jade:
+For python3.8 in linux, you can download wheel from realease.
 
-See [instruction here](build_container/README.md). It builds a `manylinux_2_28`
+To compile from source, see [instruction here](build_container/README.md). It builds a `manylinux_2_28`
 wheel. You can install the wheel via `pip`.
 
 ## Tutorial:
