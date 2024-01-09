@@ -67,12 +67,14 @@ class NimbleGUI:
                useBullet=False,
                useSyntheticCamera=True,
                saveCameraPath=None,
-               videoLogFile=None):
+               videoLogFile=None,
+               headless=False):
     self.useBullet = useBullet
     if useBullet:
       self.log_id = None
       self.saveCameraPath = None
       self.useSyntheticCamera = useSyntheticCamera
+      self.headless = headless
       self.render_bullet_init(worldToCopy)
       if videoLogFile is not None:
         video_log_dir = os.path.dirname(videoLogFile)
@@ -111,7 +113,9 @@ class NimbleGUI:
     if self.useBullet:
       if self.log_id is not None:
         p.stopStateLogging(self.log_id)
+        logger.info("Video log saved")
       p.disconnect()
+      logger.info("Bullet GUI disconnected")
       return
     self.guiServer.stopServing()
     self.httpd.shutdown()
@@ -228,8 +232,12 @@ class NimbleGUI:
       
   def render_bullet_init(self, world):
     self.p = p
-    self.gui_id = p.connect(p.GUI)
-    logger.info("Connected to GUI")
+    if self.headless:
+      self.gui_id = p.connect(p.DIRECT)
+      logger.info("Connected to DIRECT")
+    else:
+      self.gui_id = p.connect(p.GUI)
+      logger.info("Connected to GUI")
     
     if self.useSyntheticCamera:
       logger.info("Enable synthetic camera")
