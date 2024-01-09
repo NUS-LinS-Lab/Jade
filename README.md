@@ -49,9 +49,9 @@ gui.loopStates(states)
 gui.stopServing()
 ```
 
-If you want to save synthetic camera output in `{depth/rgb/segmentation}_{index}.npy`, pass the save folder path during init argument as below
+If you want to save synthetic camera output in `{depth/rgb/segmentation}_{index}.npy`, pass the save folder path during init argument as below. If you only want this and don't need the GUI window, pass `headless=True` when init the gui.
 ```
-gui = nimble.NimbleGUI(world, useBullet=True, saveCameraPath='path/to/save/foler')
+gui = nimble.NimbleGUI(world, useBullet=True, saveCameraPath='path/to/save/foler', headless=True)
 ```
 If you need to do several loopStates and want to save the camera path together, you need to pass starting index when calling `loopStates`, otherwise it will by default start from `_0.npy`. For exmple, if you want to save the camera files starting with `_1000.npy`
 ```
