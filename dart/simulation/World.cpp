@@ -492,7 +492,8 @@ void World::integrateVelocitiesFromImpulses(bool _resetCommand)
 }
 
 //==============================================================================
-void World::integratePositions(Eigen::VectorXs initialVelocity)
+void World::integratePositions(Eigen::VectorXs initialVelocity)
+
 {
   int cursor = 0;
   for (auto& skel : mSkeletons)
@@ -2045,15 +2046,8 @@ Eigen::MatrixXs World::getStateJacobian()
 {
   std::shared_ptr<neural::BackpropSnapshot> snapshot
       = getCachedBackpropSnapshot();
-  int dofs = getNumDofs();
-  Eigen::MatrixXs stateJac = Eigen::MatrixXs::Zero(2 * dofs, 2 * dofs);
   WorldPtr sharedThis = shared_from_this();
-  stateJac.block(0, 0, dofs, dofs) = snapshot->getPosPosJacobian(sharedThis);
-  stateJac.block(dofs, 0, dofs, dofs) = snapshot->getPosVelJacobian(sharedThis);
-  stateJac.block(0, dofs, dofs, dofs) = snapshot->getVelPosJacobian(sharedThis);
-  stateJac.block(dofs, dofs, dofs, dofs)
-      = snapshot->getVelVelJacobian(sharedThis);
-  return stateJac;
+  return snapshot->getStateJacobian(sharedThis);
 }
 
 //==============================================================================
@@ -2062,18 +2056,8 @@ Eigen::MatrixXs World::getActionJacobian()
 {
   std::shared_ptr<neural::BackpropSnapshot> snapshot
       = getCachedBackpropSnapshot();
-  int dofs = getNumDofs();
   WorldPtr sharedThis = shared_from_this();
-  const Eigen::MatrixXs& forceVelJac
-      = snapshot->getControlForceVelJacobian(sharedThis);
-
-  int actionDim = mActionSpace.size();
-  Eigen::MatrixXs actionJac = Eigen::MatrixXs::Zero(2 * dofs, actionDim);
-  for (int i = 0; i < actionDim; i++)
-  {
-    actionJac.block(dofs, i, dofs, 1) = forceVelJac.col(mActionSpace[i]);
-  }
-  return actionJac;
+  return snapshot->getActionJacobian(sharedThis);
 }
 
 void World::setWrenchNodeName(std::string& name)

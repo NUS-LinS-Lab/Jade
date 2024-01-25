@@ -293,7 +293,8 @@ void BackpropSnapshot::backprop(
       + velToiPos * nextTimestepLoss.lossWrtPosition
       + velToiVel * nextTimestepLoss.lossWrtVelocity;
     thisTimestepLoss.lossWrtTorque
-      = forceVel.transpose() * toiTimestepLoss.lossWrtVelocity;
+      = forceVel.transpose() * toiTimestepLoss.lossWrtVelocity
+      + toiTimestepLoss.lossWrtTorque;
     thisTimestepLoss.lossWrtMass
       = massVel.transpose() * toiTimestepLoss.lossWrtVelocity;
   }
@@ -1190,14 +1191,95 @@ const Eigen::MatrixXs& BackpropSnapshot::getBounceApproximationJacobian(
 /// This returns the Jacobian for state_t -> state_{t+1}.
 Eigen::MatrixXs BackpropSnapshot::getStateJacobian(simulation::WorldPtr world)
 {
-  // TODO: this method is untested, but is identical to the _tested_ method
-  // World::getStateJacobian(). We should really test this anyways.
+  RestorableSnapshot snapshot(world);
+
   int dofs = world->getNumDofs();
   Eigen::MatrixXs stateJac = Eigen::MatrixXs::Zero(2 * dofs, 2 * dofs);
-  stateJac.block(0, 0, dofs, dofs) = getPosPosJacobian(world);
-  stateJac.block(dofs, 0, dofs, dofs) = getPosVelJacobian(world);
-  stateJac.block(0, dofs, dofs, dofs) = getVelPosJacobian(world);
-  stateJac.block(dofs, dofs, dofs, dofs) = getVelVelJacobian(world);
+
+  if (mHasBacktrack) {
+    setWorld(world, true);
+
+    Eigen::MatrixXs A_c = getClampingConstraintMatrix(world);
+    int rows = A_c.rows();
+    int cols = A_c.cols();
+
+    Eigen::VectorXs J = Eigen::VectorXs::Zero(rows);
+    double v_n = 0;
+    Eigen::VectorXs J_c;
+
+    const Eigen::MatrixXs& toiPosPos = getPosPosJacobian(world);
+    const Eigen::MatrixXs& toiPosVel = getPosVelJacobian(world);
+    const Eigen::MatrixXs& toiVelPos = getVelPosJacobian(world);
+    const Eigen::MatrixXs& toiVelVel = getVelVelJacobian(world);
+    Eigen::VectorXs toiAcceleration = mAcceleration;
+
+    Eigen::MatrixXs afterStateJac = Eigen::MatrixXs::Zero(2 * dofs, 2 * dofs);
+    afterStateJac.block(0, 0, dofs, dofs) = toiPosPos;
+    afterStateJac.block(dofs, 0, dofs, dofs) = toiPosVel;
+    afterStateJac.block(0, dofs, dofs, dofs) = toiVelPos;
+    afterStateJac.block(dofs, dofs, dofs, dofs) = toiVelVel;
+
+    setWorld(world, false);
+
+    for (int c = 0; c < cols; c++) {
+      J_c = A_c.col(c);
+      if (abs(J_c.dot(mPreStepVelocity)) > abs(v_n)) 
+      {
+        v_n = - J_c.dot(mPreStepVelocity);
+        J = J_c / v_n;
+      }
+    }
+
+    const Eigen::MatrixXs& posPos = getPosPosJacobian(world);
+    const Eigen::MatrixXs& posVel = getPosVelJacobian(world);
+    const Eigen::MatrixXs& velPos = getVelPosJacobian(world);
+    const Eigen::MatrixXs& velVel = getVelVelJacobian(world);
+
+    Eigen::MatrixXs beforeStateJac = Eigen::MatrixXs::Zero(2 * dofs, 2 * dofs);
+    beforeStateJac.block(0, 0, dofs, dofs) = posPos;
+    beforeStateJac.block(dofs, 0, dofs, dofs) = posVel;
+    beforeStateJac.block(0, dofs, dofs, dofs) = velPos;
+    beforeStateJac.block(dofs, dofs, dofs, dofs) = velVel;
+
+    const Eigen::MatrixXs& posToi = J;
+    const Eigen::MatrixXs& velToi = mTimeStep * J;
+
+    Eigen::VectorXs deltaVel =  mPostStepVelocity - mPreStepVelocity;
+    Eigen::VectorXs preAcceleration;
+    preAcceleration = deltaVel / mTimeStep;
+    Eigen::VectorXs deltaAcc = toiAcceleration - preAcceleration;
+
+    if (std::isnan(deltaAcc.sum()) || std::isinf(deltaAcc.sum()))
+      deltaAcc = Eigen::VectorXs::Zero(mNumDOFs);
+
+    Eigen::MatrixXs posToiPos = posToi * deltaVel.transpose();
+    Eigen::MatrixXs posToiVel = posToi * deltaAcc.transpose();
+    Eigen::MatrixXs velToiPos = velToi * deltaVel.transpose();
+    Eigen::MatrixXs velToiVel = velToi * deltaAcc.transpose();
+
+    Eigen::MatrixXs toiStateJac = Eigen::MatrixXs::Zero(2 * dofs, 2 * dofs);
+    toiStateJac.block(0, 0, dofs, dofs) = posToiPos;
+    toiStateJac.block(dofs, 0, dofs, dofs) = posToiVel;
+    toiStateJac.block(0, dofs, dofs, dofs) = velToiPos;
+    toiStateJac.block(dofs, dofs, dofs, dofs) = velToiVel;
+
+    stateJac = afterStateJac * beforeStateJac + toiStateJac;
+  }
+  else {
+    setWorld(world, false);
+    const Eigen::MatrixXs& posPos = getPosPosJacobian(world);
+    const Eigen::MatrixXs& posVel = getPosVelJacobian(world);
+    const Eigen::MatrixXs& velPos = getVelPosJacobian(world);
+    const Eigen::MatrixXs& velVel = getVelVelJacobian(world);
+
+    stateJac.block(0, 0, dofs, dofs) = posPos;
+    stateJac.block(dofs, 0, dofs, dofs) = posVel;
+    stateJac.block(0, dofs, dofs, dofs) = velPos;
+    stateJac.block(dofs, dofs, dofs, dofs) = velVel;
+  }
+
+  snapshot.restore();
+  world->setTimeStep(world->getOriginTimeStep());
   return stateJac;
 }
 
@@ -1205,19 +1287,50 @@ Eigen::MatrixXs BackpropSnapshot::getStateJacobian(simulation::WorldPtr world)
 /// This returns the Jacobian for action_t -> state_{t+1}.
 Eigen::MatrixXs BackpropSnapshot::getActionJacobian(simulation::WorldPtr world)
 {
-  // TODO: this method is untested, but is identical to the _tested_ method
-  // World::getActionJacobian(). We should really test this anyways.
-  int dofs = world->getNumDofs();
-  const Eigen::MatrixXs& forceVelJac = getControlForceVelJacobian(world);
+  RestorableSnapshot snapshot(world);
 
-  std::vector<int> actionSpace = world->getActionSpace();
+  int dofs = world->getNumDofs();
   int actionDim = world->getActionSize();
   Eigen::MatrixXs actionJac = Eigen::MatrixXs::Zero(2 * dofs, actionDim);
-  for (int i = 0; i < actionDim; i++)
-  {
-    actionJac.block(dofs, i, dofs, 1) = forceVelJac.col(actionSpace[i]);
+  
+  if (mHasBacktrack) {
+    setWorld(world, true);
+
+    const Eigen::MatrixXs& toiPosPos = getPosPosJacobian(world);
+    const Eigen::MatrixXs& toiPosVel = getPosVelJacobian(world);
+    const Eigen::MatrixXs& toiVelPos = getVelPosJacobian(world);
+    const Eigen::MatrixXs& toiVelVel = getVelVelJacobian(world);
+    const Eigen::MatrixXs& toiForceVel = getControlForceVelJacobian(world);
+
+    Eigen::MatrixXs afterStateJac = Eigen::MatrixXs::Zero(2 * dofs, 2 * dofs);
+    afterStateJac.block(0, 0, dofs, dofs) = toiPosPos;
+    afterStateJac.block(dofs, 0, dofs, dofs) = toiPosVel;
+    afterStateJac.block(0, dofs, dofs, dofs) = toiVelPos;
+    afterStateJac.block(dofs, dofs, dofs, dofs) = toiVelVel;
+
+    Eigen::MatrixXs afterActionJac = Eigen::MatrixXs::Zero(2 * dofs, actionDim);
+    afterActionJac.block(dofs, 0, dofs, actionDim) = toiForceVel;
+
+    setWorld(world, false);
+
+    const Eigen::MatrixXs& forceVel = getControlForceVelJacobian(world);
+    Eigen::MatrixXs beforeActionJac = Eigen::MatrixXs::Zero(2 * dofs, actionDim);
+    beforeActionJac.block(dofs, 0, dofs, actionDim) = forceVel;
+
+    actionJac = afterStateJac * beforeActionJac + afterActionJac;
   }
+  else {
+    setWorld(world, false);
+
+    const Eigen::MatrixXs& forceVel = getControlForceVelJacobian(world);
+    actionJac.block(dofs, 0, dofs, actionDim) = forceVel;
+  }
+
+
+  snapshot.restore();
+  world->setTimeStep(world->getOriginTimeStep());
   return actionJac;
+
 }
 
 //==============================================================================
